@@ -1,0 +1,22 @@
+{
+  "name": "aprendo",
+  "private": true,
+  "packageManager": "pnpm@10.15.0",
+  "scripts": {
+    "dev": "turbo run dev --filter=@aprendo/web",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:migrate": "turbo run db:migrate --filter=@aprendo/db",
+    "ingest": "turbo run ingest --filter=@aprendo/ingest"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "lightningcss"
+    ]
+  },
+  "devDependencies": {
+    "turbo": "^2.5.6"
+  }
+}
