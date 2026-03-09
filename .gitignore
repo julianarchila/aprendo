@@ -9,5 +9,3 @@ dist
 coverage
 apps/web/.tanstack
 apps/web/.vinxi
-data/*
-!data/.gitkeep
