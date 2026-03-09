@@ -11,7 +11,7 @@ Lean monorepo scaffold for an AI-assisted ICFES preparation platform.
 
 ## Stack
 
-- `pnpm` workspaces
+- `bun` workspaces
 - `turbo` for task orchestration
 - TanStack Start for the student-facing web app
 - TypeScript across the workspace
@@ -28,7 +28,6 @@ packages/
 data/
 docker-compose.yml
 package.json
-pnpm-workspace.yaml
 turbo.json
 tsconfig.base.json
 ```
@@ -38,7 +37,7 @@ tsconfig.base.json
 1. Install dependencies:
 
    ```bash
-   pnpm install
+   bun install
    ```
 
 2. Start PostgreSQL:
@@ -56,17 +55,17 @@ tsconfig.base.json
 4. Start the web app:
 
    ```bash
-   pnpm dev
+   bun run dev
    ```
 
 ## Workspace commands
 
-- `pnpm dev`: run the TanStack Start app through Turbo
-- `pnpm build`: build or compile-check all workspace packages
-- `pnpm typecheck`: run TypeScript checks across the monorepo
-- `pnpm test`: run placeholder test commands
-- `pnpm db:migrate`: execute the placeholder database migration entrypoint
-- `pnpm ingest`: execute the placeholder ingestion CLI
+- `bun run dev`: run the TanStack Start app through Turbo
+- `bun run build`: build or compile-check all workspace packages
+- `bun run typecheck`: run TypeScript checks across the monorepo
+- `bun run test`: run placeholder test commands
+- `bun run db:migrate`: execute the placeholder database migration entrypoint
+- `bun run ingest`: execute the placeholder ingestion CLI
 
 ## Current boundaries
 
