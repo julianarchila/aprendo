@@ -9,3 +9,4 @@ dist
 coverage
 apps/web/.tanstack
 apps/web/.vinxi
+packages/ingest/.artifacts
