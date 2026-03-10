@@ -1,9 +1,10 @@
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import * as FileSystem from '@effect/platform/FileSystem'
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem'
 import { Mistral } from '@mistralai/mistralai'
-import { Console, Effect } from 'effect'
 import type { OCRResponse } from '@mistralai/mistralai/models/components'
+import { Cause, Config, Console, Data, Effect, Option } from 'effect'
 
 const samplePdfRelativePath = 'data/pdfs/Matemáticas2010.pdf'
 
@@ -38,18 +39,37 @@ export interface SampleOcrRunSummary {
   pages: SampleOcrPageArtifact[]
 }
 
-class SampleOcrPageError extends Error {
-  constructor(
-    message: string,
-    readonly code: string,
-    readonly details?: Record<string, unknown>,
-  ) {
-    super(message)
-    this.name = 'SampleOcrPageError'
-  }
+export interface SampleOcrPaths {
+  packageRoot: string
+  repoRoot: string
+  pdfPath: string
+  artifactRoot: string
+  rawDir: string
+  assetsDir: string
+  pagesDir: string
+  summaryPath: string
 }
 
-function getScriptPaths() {
+export interface SampleOcrRunResult {
+  summary: SampleOcrRunSummary
+  markdownDir: string
+  pageCount: number
+}
+
+export class SampleOcrError extends Data.TaggedError('SampleOcrError')<{
+  code:
+    | 'ASSET_WRITE_FAILED'
+    | 'ARTIFACT_SETUP_FAILED'
+    | 'ARTIFACT_WRITE_FAILED'
+    | 'MISSING_MISTRAL_API_KEY'
+    | 'OCR_REQUEST_FAILED'
+    | 'PDF_NOT_FOUND'
+    | 'PDF_READ_FAILED'
+  message: string
+  details?: Record<string, unknown>
+}> {}
+
+export function getSampleOcrPaths(): SampleOcrPaths {
   const srcDir = path.dirname(fileURLToPath(import.meta.url))
   const packageRoot = path.resolve(srcDir, '..')
   const repoRoot = path.resolve(packageRoot, '../..')
@@ -92,7 +112,11 @@ function detectImageExtension(imageBuffer: Buffer) {
     return 'png'
   }
 
-  if (imageBuffer.length >= 2 && imageBuffer[0] === 0xff && imageBuffer[1] === 0xd8) {
+  if (
+    imageBuffer.length >= 2 &&
+    imageBuffer[0] === 0xff &&
+    imageBuffer[1] === 0xd8
+  ) {
     return 'jpg'
   }
 
@@ -114,6 +138,13 @@ function detectImageExtension(imageBuffer: Buffer) {
   }
 
   return 'bin'
+}
+
+function countAssetsByKind(
+  assets: SampleOcrPageAsset[],
+  kind: SampleOcrPageAssetKind,
+) {
+  return assets.filter((asset) => asset.kind === kind).length
 }
 
 export function buildRawResponseFileName() {
@@ -175,7 +206,7 @@ function rewriteInlineImageLinks(
 
     const markdownAssetPath = resolveMarkdownAssetPath(asset)
 
-    if (!markdownAssetPath) {
+    if (markdownAssetPath === null) {
       continue
     }
 
@@ -200,8 +231,8 @@ export function renderPageMarkdown(
   const lines = [
     '---',
     `pageNumber: ${page.pageNumber}`,
-    `imageCount: ${page.assets.filter((asset) => asset.kind === 'image').length}`,
-    `tableCount: ${page.assets.filter((asset) => asset.kind === 'table').length}`,
+    `imageCount: ${countAssetsByKind(page.assets, 'image')}`,
+    `tableCount: ${countAssetsByKind(page.assets, 'table')}`,
     '---',
     '',
     `# Page ${page.pageNumber}`,
@@ -231,88 +262,163 @@ export function renderPageMarkdown(
   return `${lines.join('\n').trimEnd()}\n`
 }
 
-async function writeJsonArtifact(filePath: string, payload: unknown) {
-  await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
+function failSampleOcr(
+  code: SampleOcrError['code'],
+  message: string,
+  details?: Record<string, unknown>,
+) {
+  return new SampleOcrError({ code, message, details })
 }
 
-async function writePageMarkdownArtifacts(args: {
+function fileSystemCause(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function loadRequiredEnvVar(key: string) {
+  return Config.string(key).pipe(
+    Effect.mapError((error) =>
+      failSampleOcr(
+        'MISSING_MISTRAL_API_KEY',
+        'MISTRAL_API_KEY is missing from configuration.',
+        {
+          key,
+          cause: String(error),
+        },
+      ),
+    ),
+  )
+}
+
+function loadPdfDocumentUrl(pdfPath: string) {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    const fileBuffer = yield* fs.readFile(pdfPath).pipe(
+      Effect.mapError((error) =>
+        failSampleOcr(
+          error._tag === 'SystemError' && error.reason === 'NotFound'
+            ? 'PDF_NOT_FOUND'
+            : 'PDF_READ_FAILED',
+          'Unable to read the sample PDF.',
+          {
+            pdfPath,
+            cause: fileSystemCause(error),
+          },
+        ),
+      ),
+    )
+
+    return `data:application/pdf;base64,${Buffer.from(fileBuffer).toString('base64')}`
+  })
+}
+
+function resetArtifactDirectories(paths: SampleOcrPaths) {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+
+    yield* fs.remove(paths.artifactRoot, { recursive: true }).pipe(
+      Effect.catchTag('SystemError', (error) =>
+        error.reason === 'NotFound' ? Effect.void : Effect.fail(error),
+      ),
+      Effect.mapError((error) =>
+        failSampleOcr(
+          'ARTIFACT_SETUP_FAILED',
+          'Failed to prepare OCR artifact directories.',
+          {
+            artifactRoot: paths.artifactRoot,
+            cause: fileSystemCause(error),
+          },
+        ),
+      ),
+    )
+
+    yield* fs.makeDirectory(paths.rawDir, { recursive: true }).pipe(
+      Effect.mapError((error) =>
+        failSampleOcr(
+          'ARTIFACT_SETUP_FAILED',
+          'Failed to prepare OCR artifact directories.',
+          {
+            artifactRoot: paths.artifactRoot,
+            cause: fileSystemCause(error),
+          },
+        ),
+      ),
+    )
+    yield* fs.makeDirectory(paths.assetsDir, { recursive: true }).pipe(
+      Effect.mapError((error) =>
+        failSampleOcr(
+          'ARTIFACT_SETUP_FAILED',
+          'Failed to prepare OCR artifact directories.',
+          {
+            artifactRoot: paths.artifactRoot,
+            cause: fileSystemCause(error),
+          },
+        ),
+      ),
+    )
+    yield* fs.makeDirectory(paths.pagesDir, { recursive: true }).pipe(
+      Effect.mapError((error) =>
+        failSampleOcr(
+          'ARTIFACT_SETUP_FAILED',
+          'Failed to prepare OCR artifact directories.',
+          {
+            artifactRoot: paths.artifactRoot,
+            cause: fileSystemCause(error),
+          },
+        ),
+      ),
+    )
+  })
+}
+
+function writeJsonArtifact(filePath: string, payload: unknown) {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    yield* fs.writeFileString(filePath, `${JSON.stringify(payload, null, 2)}\n`).pipe(
+      Effect.mapError((error) =>
+        failSampleOcr('ARTIFACT_WRITE_FAILED', 'Failed to write JSON artifact.', {
+          filePath,
+          cause: fileSystemCause(error),
+        }),
+      ),
+    )
+  })
+}
+
+function writePageMarkdownArtifacts(args: {
   pages: SampleOcrPage[]
   pagesDir: string
   repoRoot: string
 }) {
-  await mkdir(args.pagesDir, { recursive: true })
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
 
-  for (const page of args.pages) {
-    const markdownPath = path.join(
-      args.pagesDir,
-      buildPageMarkdownFileName(page.pageNumber),
-    )
-    const markdown = renderPageMarkdown(page, (asset) => {
-      if (!asset.filePath) {
-        return null
-      }
+    for (const page of args.pages) {
+      const markdownPath = path.join(
+        args.pagesDir,
+        buildPageMarkdownFileName(page.pageNumber),
+      )
+      const markdown = renderPageMarkdown(page, (asset) => {
+        if (asset.filePath === null) {
+          return null
+        }
 
-      const absoluteAssetPath = path.join(args.repoRoot, asset.filePath)
-      return path
-        .relative(args.pagesDir, absoluteAssetPath)
-        .split(path.sep)
-        .join('/')
-    })
+        const absoluteAssetPath = path.join(args.repoRoot, asset.filePath)
+        return path.relative(args.pagesDir, absoluteAssetPath).split(path.sep).join('/')
+      })
 
-    await writeFile(markdownPath, markdown, 'utf8')
-  }
-}
-
-function ensureFileExists(filePath: string) {
-  return Effect.tryPromise({
-    try: async () => {
-      const fileStats = await stat(filePath)
-
-      if (!fileStats.isFile()) {
-        throw new SampleOcrPageError(
-          'Expected a file path but found something else.',
-          'INVALID_FILE_PATH',
-          { filePath },
-        )
-      }
-    },
-    catch: (error) =>
-      error instanceof SampleOcrPageError
-        ? error
-        : new SampleOcrPageError('Sample PDF was not found.', 'PDF_NOT_FOUND', {
-            filePath,
-            cause: error instanceof Error ? error.message : String(error),
-          }),
-  })
-}
-
-function loadRequiredEnvVar(key: string) {
-  return Effect.sync(() => {
-    const value = process.env[key]?.trim() ?? ''
-
-    if (value.length > 0) {
-      return value
+      yield* fs.writeFileString(markdownPath, markdown).pipe(
+        Effect.mapError((error) =>
+          failSampleOcr(
+            'ARTIFACT_WRITE_FAILED',
+            'Failed to write page markdown artifacts.',
+            {
+              pagesDir: args.pagesDir,
+              cause: fileSystemCause(error),
+            },
+          ),
+        ),
+      )
     }
-
-    throw new SampleOcrPageError(
-      'MISTRAL_API_KEY is missing from the Bun environment.',
-      'MISSING_MISTRAL_API_KEY',
-      { key },
-    )
-  })
-}
-
-function buildPdfDataUrl(pdfPath: string) {
-  return Effect.tryPromise({
-    try: async () => {
-      const fileBuffer = await readFile(pdfPath)
-      return `data:application/pdf;base64,${fileBuffer.toString('base64')}`
-    },
-    catch: (error) =>
-      new SampleOcrPageError('Unable to read the sample PDF.', 'PDF_READ_FAILED', {
-        pdfPath,
-        cause: error instanceof Error ? error.message : String(error),
-      }),
   })
 }
 
@@ -321,172 +427,206 @@ function persistPageAssets(args: {
   assetsDir: string
   repoRoot: string
 }) {
-  return Effect.tryPromise({
-    try: async () => {
-      const pageMap = new Map<number, SampleOcrPage>()
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    const pages: SampleOcrPage[] = []
 
-      for (const page of args.response.pages) {
-        const pageNumber = page.index + 1
-        const assets: SampleOcrPageAsset[] = []
+    for (const page of args.response.pages) {
+      const pageNumber = page.index + 1
+      const assets: SampleOcrPageAsset[] = []
 
-        for (const [imageIndex, image] of page.images.entries()) {
-          let filePath: string | null = null
+      for (const [imageIndex, image] of page.images.entries()) {
+        let filePath: string | null = null
 
-          if (image.imageBase64) {
-            const imageBuffer = decodeBase64Payload(image.imageBase64)
-            const extension = detectImageExtension(imageBuffer)
-            const absolutePath = path.join(
-              args.assetsDir,
-              buildImageAssetFileName(pageNumber, imageIndex, extension),
-            )
+        if (image.imageBase64 !== null && image.imageBase64 !== undefined) {
+          const imageBuffer = decodeBase64Payload(image.imageBase64)
+          const extension = detectImageExtension(imageBuffer)
+          const absolutePath = path.join(
+            args.assetsDir,
+            buildImageAssetFileName(pageNumber, imageIndex, extension),
+          )
 
-            await writeFile(absolutePath, imageBuffer)
-            filePath = toRepoRelativePath(args.repoRoot, absolutePath)
-          }
-
-          assets.push({
-            kind: 'image',
-            pageNumber,
-            label: `Image ${imageIndex + 1}`,
-            filePath,
-            markdownContent: null,
-            sourceAssetId: image.id,
-          })
+          yield* fs.writeFile(absolutePath, imageBuffer).pipe(
+            Effect.mapError((error) =>
+              failSampleOcr(
+                'ASSET_WRITE_FAILED',
+                'Failed to persist OCR page assets.',
+                {
+                  assetsDir: args.assetsDir,
+                  cause: fileSystemCause(error),
+                },
+              ),
+            ),
+          )
+          filePath = toRepoRelativePath(args.repoRoot, absolutePath)
         }
 
-        for (const [tableIndex, table] of (page.tables ?? []).entries()) {
-          assets.push({
-            kind: 'table',
-            pageNumber,
-            label: `Table ${tableIndex + 1}`,
-            filePath: null,
-            markdownContent: table.content.trim(),
-            sourceAssetId: table.id,
-          })
-        }
-
-        pageMap.set(pageNumber, {
+        assets.push({
+          kind: 'image',
           pageNumber,
-          markdown: page.markdown.trim(),
-          assets,
+          label: `Image ${imageIndex + 1}`,
+          filePath,
+          markdownContent: null,
+          sourceAssetId: image.id,
         })
       }
 
-      return Array.from(pageMap.values()).sort(
-        (left, right) => left.pageNumber - right.pageNumber,
-      )
-    },
+      for (const [tableIndex, table] of (page.tables ?? []).entries()) {
+        assets.push({
+          kind: 'table',
+          pageNumber,
+          label: `Table ${tableIndex + 1}`,
+          filePath: null,
+          markdownContent: table.content.trim(),
+          sourceAssetId: table.id,
+        })
+      }
+
+      pages.push({
+        pageNumber,
+        markdown: page.markdown.trim(),
+        assets,
+      })
+    }
+
+    return pages.sort((left, right) => left.pageNumber - right.pageNumber)
+  })
+}
+
+function requestOcr(args: { apiKey: string; documentUrl: string }) {
+  return Effect.tryPromise({
+    try: () =>
+      new Mistral({ apiKey: args.apiKey }).ocr.process({
+        model: 'mistral-ocr-latest',
+        document: {
+          type: 'document_url',
+          documentUrl: args.documentUrl,
+        },
+        includeImageBase64: true,
+        tableFormat: 'markdown',
+      }),
     catch: (error) =>
-      new SampleOcrPageError('Failed to persist OCR page assets.', 'ASSET_WRITE_FAILED', {
+      failSampleOcr('OCR_REQUEST_FAILED', 'Mistral OCR request failed.', {
         cause: error instanceof Error ? error.message : String(error),
       }),
   })
 }
 
-const program = Effect.gen(function* () {
-  const paths = getScriptPaths()
-
-  yield* ensureFileExists(paths.pdfPath)
-  const apiKey = yield* loadRequiredEnvVar('MISTRAL_API_KEY')
-  const pdfDataUrl = yield* buildPdfDataUrl(paths.pdfPath)
-
-  yield* Effect.tryPromise(() => rm(paths.artifactRoot, { recursive: true, force: true }))
-  yield* Effect.tryPromise(() => mkdir(paths.rawDir, { recursive: true }))
-  yield* Effect.tryPromise(() => mkdir(paths.assetsDir, { recursive: true }))
-
-  const client = new Mistral({ apiKey })
-  const response = yield* Effect.tryPromise({
-    try: () =>
-      client.ocr.process({
-        model: 'mistral-ocr-latest',
-        document: {
-          type: 'document_url',
-          documentUrl: pdfDataUrl,
-        },
-        includeImageBase64: true,
-        tableFormat: 'markdown',
-        extractHeader: false,
-        extractFooter: false,
-      }),
-    catch: (error) =>
-      new SampleOcrPageError('Mistral OCR request failed.', 'OCR_REQUEST_FAILED', {
-        cause: error instanceof Error ? error.message : String(error),
-      }),
-  })
-
-  const rawResponsePath = path.join(paths.rawDir, buildRawResponseFileName())
-  yield* Effect.tryPromise(() => writeJsonArtifact(rawResponsePath, response))
-
-  const pages = yield* persistPageAssets({
-    response,
-    assetsDir: paths.assetsDir,
-    repoRoot: paths.repoRoot,
-  })
-
-  yield* Effect.tryPromise(() =>
-    writePageMarkdownArtifacts({
-      pages,
-      pagesDir: paths.pagesDir,
-      repoRoot: paths.repoRoot,
-    }),
-  )
-
-  const pageArtifacts: SampleOcrPageArtifact[] = pages.map((page) => ({
+function buildPageArtifacts(
+  pages: SampleOcrPage[],
+  paths: SampleOcrPaths,
+): SampleOcrPageArtifact[] {
+  return pages.map((page) => ({
     pageNumber: page.pageNumber,
     markdownPath: toRepoRelativePath(
       paths.repoRoot,
       path.join(paths.pagesDir, buildPageMarkdownFileName(page.pageNumber)),
     ),
-    imageCount: page.assets.filter((asset) => asset.kind === 'image').length,
-    tableCount: page.assets.filter((asset) => asset.kind === 'table').length,
+    imageCount: countAssetsByKind(page.assets, 'image'),
+    tableCount: countAssetsByKind(page.assets, 'table'),
   }))
+}
 
-  const summary: SampleOcrRunSummary = {
+function buildRunSummary(args: {
+  paths: SampleOcrPaths
+  rawResponsePath: string
+  pages: SampleOcrPage[]
+}): SampleOcrRunSummary {
+  return {
     sourcePdf: samplePdfRelativePath,
     generatedAt: new Date().toISOString(),
-    rawResponsePath: toRepoRelativePath(paths.repoRoot, rawResponsePath),
-    pages: pageArtifacts,
+    rawResponsePath: toRepoRelativePath(args.paths.repoRoot, args.rawResponsePath),
+    pages: buildPageArtifacts(args.pages, args.paths),
   }
+}
 
-  yield* Effect.tryPromise(() => writeJsonArtifact(paths.summaryPath, summary))
-  yield* Console.log(
-    JSON.stringify(
-      {
-        status: 'ok',
-        rawResponsePath: summary.rawResponsePath,
-        markdownDir: toRepoRelativePath(paths.repoRoot, paths.pagesDir),
-        pageCount: pages.length,
-      },
-      null,
-      2,
-    ),
-  )
-})
+export function runSampleOcr(paths: SampleOcrPaths = getSampleOcrPaths()) {
+  return Effect.gen(function* () {
+    const apiKey = yield* loadRequiredEnvVar('MISTRAL_API_KEY')
+    const documentUrl = yield* loadPdfDocumentUrl(paths.pdfPath)
 
-Effect.runPromise(
-  program.pipe(
-    Effect.catchAll((error) =>
-      Effect.sync(() => {
-        if (error instanceof SampleOcrPageError) {
-          console.error(
+    yield* resetArtifactDirectories(paths)
+
+    const response = yield* requestOcr({ apiKey, documentUrl })
+
+    const rawResponsePath = path.join(paths.rawDir, buildRawResponseFileName())
+    yield* writeJsonArtifact(rawResponsePath, response)
+
+    const pages = yield* persistPageAssets({
+      response,
+      assetsDir: paths.assetsDir,
+      repoRoot: paths.repoRoot,
+    })
+
+    yield* writePageMarkdownArtifacts({
+      pages,
+      pagesDir: paths.pagesDir,
+      repoRoot: paths.repoRoot,
+    })
+
+    const summary = buildRunSummary({
+      paths,
+      rawResponsePath,
+      pages,
+    })
+
+    yield* writeJsonArtifact(paths.summaryPath, summary)
+
+    return {
+      summary,
+      markdownDir: toRepoRelativePath(paths.repoRoot, paths.pagesDir),
+      pageCount: pages.length,
+    } satisfies SampleOcrRunResult
+  })
+}
+
+async function runCli() {
+  await Effect.runPromise(
+    runSampleOcr().pipe(
+      Effect.matchCauseEffect({
+        onFailure: (cause) => {
+          const failure = Cause.failureOption(cause)
+
+          return Effect.sync(() => {
+            if (Option.isSome(failure) && failure.value instanceof SampleOcrError) {
+              console.error(
+                JSON.stringify(
+                  {
+                    status: 'error',
+                    code: failure.value.code,
+                    message: failure.value.message,
+                    details: failure.value.details ?? null,
+                  },
+                  null,
+                  2,
+                ),
+              )
+            } else {
+              console.error(cause)
+            }
+
+            process.exitCode = 1
+          })
+        },
+        onSuccess: (result) =>
+          Console.log(
             JSON.stringify(
               {
-                status: 'error',
-                code: error.code,
-                message: error.message,
-                details: error.details ?? null,
+                status: 'ok',
+                rawResponsePath: result.summary.rawResponsePath,
+                markdownDir: result.markdownDir,
+                pageCount: result.pageCount,
               },
               null,
               2,
             ),
-          )
-          process.exitCode = 1
-          return
-        }
-
-        console.error(error)
-        process.exitCode = 1
+          ),
       }),
+      Effect.provide(NodeFileSystem.layer),
     ),
-  ),
-)
+  )
+}
+
+if (import.meta.main) {
+  void runCli()
+}
