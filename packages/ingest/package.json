@@ -10,9 +10,7 @@
     "build": "tsc --project tsconfig.json",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "test": "bun test",
-    "ingest": "bun run src/mistral-ocr-sample.ts",
-    "ocr:sample": "bun run src/mistral-ocr-sample.ts",
-    "extract:sample": "bun run src/question-extractor.ts"
+    "ingest": "bun run src/ingest.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.43",

@@ -1,10 +1,8 @@
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import * as FileSystem from '@effect/platform/FileSystem'
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { generateText, Output } from 'ai'
-import { Cause, Config, Console, Data, Effect, Option } from 'effect'
+import { Config, Console, Data, Effect } from 'effect'
 import { QuestionExtractionSchema } from './question-schema'
 import type { QuestionExtraction } from './question-schema'
 
@@ -17,22 +15,6 @@ export interface ExtractorPaths {
   artifactRoot: string
 }
 
-export function getDefaultExtractorPaths(): ExtractorPaths {
-  const srcDir = path.dirname(fileURLToPath(import.meta.url))
-  const packageRoot = path.resolve(srcDir, '..')
-  const artifactRoot = path.join(
-    packageRoot,
-    '.artifacts',
-    'mistral-ocr',
-    'matematicas2010',
-  )
-
-  return {
-    artifactRoot,
-    pagesDir: path.join(artifactRoot, 'pages'),
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -40,10 +22,7 @@ export function getDefaultExtractorPaths(): ExtractorPaths {
 export class QuestionExtractorError extends Data.TaggedError(
   'QuestionExtractorError',
 )<{
-  code:
-    | 'EXTRACTION_FAILED'
-    | 'OUTPUT_WRITE_FAILED'
-    | 'PAGES_NOT_FOUND'
+  code: 'EXTRACTION_FAILED' | 'OUTPUT_WRITE_FAILED' | 'PAGES_NOT_FOUND'
   message: string
   details?: Record<string, unknown>
 }> {}
@@ -126,9 +105,7 @@ function readPageMarkdownFiles(pagesDir: string) {
       ),
     )
 
-    const markdownFiles = entries
-      .filter((f) => f.endsWith('.md'))
-      .sort()
+    const markdownFiles = entries.filter((f) => f.endsWith('.md')).sort()
 
     if (markdownFiles.length === 0) {
       return yield* Effect.fail(
@@ -165,7 +142,7 @@ function extractQuestions(args: { apiKey: string; pagesMarkdown: string }) {
       const google = createGoogleGenerativeAI({ apiKey: args.apiKey })
 
       const { output } = await generateText({
-        model: google('gemini-2.5-flash'),
+        model: google('gemini-3-flash-preview'),
         output: Output.array({
           element: QuestionExtractionSchema,
         }),
@@ -217,75 +194,22 @@ function writeQuestions(args: {
 // Main pipeline
 // ---------------------------------------------------------------------------
 
-export function runQuestionExtractor(
-  paths: ExtractorPaths = getDefaultExtractorPaths(),
-) {
+export function runQuestionExtractor(paths: ExtractorPaths) {
   return Effect.gen(function* () {
     const apiKey = yield* Config.string('GEMINI_API_KEY')
 
-    yield* Console.log('Reading page markdown files...')
+    yield* Console.log('  Reading page markdown files...')
     const pagesMarkdown = yield* readPageMarkdownFiles(paths.pagesDir)
 
-    yield* Console.log('Extracting questions with Gemini...')
+    yield* Console.log('  Extracting questions with Gemini...')
     const questions = yield* extractQuestions({ apiKey, pagesMarkdown })
 
     const outputPath = path.join(paths.artifactRoot, 'questions.json')
-    yield* Console.log(`Writing ${questions.length} questions to ${outputPath}`)
+    yield* Console.log(
+      `  Extraction complete: ${questions.length} questions → ${outputPath}`,
+    )
     yield* writeQuestions({ questions, outputPath })
 
     return { questionCount: questions.length }
   })
-}
-
-// ---------------------------------------------------------------------------
-// CLI
-// ---------------------------------------------------------------------------
-
-async function runCli() {
-  await Effect.runPromise(
-    runQuestionExtractor().pipe(
-      Effect.matchCauseEffect({
-        onFailure: (cause) => {
-          const failure = Cause.failureOption(cause)
-
-          return Effect.sync(() => {
-            if (
-              Option.isSome(failure) &&
-              failure.value instanceof QuestionExtractorError
-            ) {
-              console.error(
-                JSON.stringify(
-                  {
-                    status: 'error',
-                    code: failure.value.code,
-                    message: failure.value.message,
-                    details: failure.value.details ?? null,
-                  },
-                  null,
-                  2,
-                ),
-              )
-            } else {
-              console.error(cause)
-            }
-
-            process.exitCode = 1
-          })
-        },
-        onSuccess: (result) =>
-          Console.log(
-            JSON.stringify(
-              { status: 'ok', questionCount: result.questionCount },
-              null,
-              2,
-            ),
-          ),
-      }),
-      Effect.provide(NodeFileSystem.layer),
-    ),
-  )
-}
-
-if (import.meta.main) {
-  void runCli()
 }

@@ -3,7 +3,7 @@ import {
   buildImageAssetFileName,
   buildPageMarkdownFileName,
   buildPageMarkdown,
-} from '../src/mistral-ocr-sample'
+} from '../src/mistral-ocr'
 
 describe('buildImageAssetFileName', () => {
   test('uses stable page-based file names for extracted images', () => {
