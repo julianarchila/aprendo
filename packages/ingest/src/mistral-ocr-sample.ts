@@ -9,16 +9,16 @@ const samplePdfRelativePath = 'data/pdfs/Matemáticas2010.pdf'
 
 export class SampleOcrError extends Data.TaggedError('SampleOcrError')<{
   code:
-    | 'ARTIFACT_SETUP_FAILED'
-    | 'ASSET_WRITE_FAILED'
-    | 'MARKDOWN_WRITE_FAILED'
-    | 'MISSING_MISTRAL_API_KEY'
-    | 'OCR_REQUEST_FAILED'
-    | 'PDF_NOT_FOUND'
-    | 'PDF_READ_FAILED'
+  | 'ARTIFACT_SETUP_FAILED'
+  | 'ASSET_WRITE_FAILED'
+  | 'MARKDOWN_WRITE_FAILED'
+  | 'MISSING_MISTRAL_API_KEY'
+  | 'OCR_REQUEST_FAILED'
+  | 'PDF_NOT_FOUND'
+  | 'PDF_READ_FAILED'
   message: string
   details?: Record<string, unknown>
-}> {}
+}> { }
 
 export interface SampleOcrPaths {
   packageRoot: string
@@ -116,18 +116,6 @@ export function buildImageAssetFileName(
 
 export function buildPageMarkdownFileName(pageNumber: number) {
   return `page-${String(pageNumber).padStart(2, '0')}.md`
-}
-
-function loadRequiredEnvVar(key: string) {
-  return Config.string(key).pipe(
-    Effect.mapError((error) =>
-      failSampleOcr(
-        'MISSING_MISTRAL_API_KEY',
-        'MISTRAL_API_KEY is missing from configuration.',
-        { key, cause: String(error) },
-      ),
-    ),
-  )
 }
 
 function loadPdfDocumentUrl(pdfPath: string) {
@@ -288,7 +276,7 @@ export function buildPageMarkdown(args: {
 export function runSampleOcr(paths: SampleOcrPaths = getSampleOcrPaths()) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
-    const apiKey = yield* loadRequiredEnvVar('MISTRAL_API_KEY')
+    const apiKey = yield* Config.string('MISTRAL_API_KEY')
     const documentUrl = yield* loadPdfDocumentUrl(paths.pdfPath)
 
     yield* resetArtifactDirectories(paths)
