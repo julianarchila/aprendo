@@ -2,16 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import {
   buildImageAssetFileName,
   buildPageMarkdownFileName,
-  buildRawResponseFileName,
-  renderPageMarkdown,
+  buildPageMarkdown,
 } from '../src/mistral-ocr-sample'
-import type { SampleOcrPage } from '../src/mistral-ocr-sample'
-
-describe('buildRawResponseFileName', () => {
-  test('uses a stable raw OCR response file name', () => {
-    expect(buildRawResponseFileName()).toBe('ocr-response.json')
-  })
-})
 
 describe('buildImageAssetFileName', () => {
   test('uses stable page-based file names for extracted images', () => {
@@ -27,43 +19,37 @@ describe('buildPageMarkdownFileName', () => {
   })
 })
 
-describe('renderPageMarkdown', () => {
-  test('renders a standalone markdown note with page text, tables, and images', () => {
-    const markdown = renderPageMarkdown(
-      {
-        pageNumber: 2,
-        markdown:
-          '# OCR page content\n\nPregunta de ejemplo.\n\n![img-1](img-1)',
-        assets: [
-          {
-            kind: 'image',
-            pageNumber: 2,
-            label: 'Image 1',
-            filePath: 'packages/ingest/.artifacts/mistral-ocr/matematicas2010/assets/page-02-image-01.jpg',
-            markdownContent: null,
-            sourceAssetId: 'img-1',
-          },
-          {
-            kind: 'table',
-            pageNumber: 2,
-            label: 'Table 1',
-            filePath: null,
-            markdownContent: '| x | y |\n| - | - |\n| 1 | 2 |',
-            sourceAssetId: 'table-1',
-          },
-        ],
-      } satisfies SampleOcrPage,
-      (asset) =>
-        asset.filePath === null ? null : '../assets/page-02-image-01.jpg',
-    )
+describe('buildPageMarkdown', () => {
+  test('renders page markdown with rewritten image links and appended tables', () => {
+    const markdown = buildPageMarkdown({
+      pageNumber: 2,
+      markdown:
+        '# OCR page content\n\nPregunta de ejemplo.\n\n![img-1](img-1)',
+      tables: [
+        { id: 'table-1', content: '| x | y |\n| - | - |\n| 1 | 2 |' },
+      ],
+      idToRelativePath: new Map([
+        ['img-1', '../assets/page-02-image-01.jpg'],
+      ]),
+    })
 
     expect(markdown).toContain('# Page 2')
-    expect(markdown).toContain('## OCR Text')
-    expect(markdown).toContain('## Tables')
-    expect(markdown).toContain('## Images')
     expect(markdown).toContain('![img-1](../assets/page-02-image-01.jpg)')
-    expect(markdown).toContain('![Image 1](../assets/page-02-image-01.jpg)')
+    expect(markdown).toContain('## Tables')
+    expect(markdown).toContain('<!-- table-1 -->')
     expect(markdown).toContain('| x | y |')
-    expect(markdown).toContain('Source asset id: table-1')
+  })
+
+  test('omits tables section when there are no tables', () => {
+    const markdown = buildPageMarkdown({
+      pageNumber: 1,
+      markdown: 'Simple text content.',
+      tables: [],
+      idToRelativePath: new Map(),
+    })
+
+    expect(markdown).toContain('# Page 1')
+    expect(markdown).toContain('Simple text content.')
+    expect(markdown).not.toContain('## Tables')
   })
 })

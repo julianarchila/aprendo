@@ -3,64 +3,15 @@ import { fileURLToPath } from 'node:url'
 import * as FileSystem from '@effect/platform/FileSystem'
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem'
 import { Mistral } from '@mistralai/mistralai'
-import type { OCRResponse } from '@mistralai/mistralai/models/components'
 import { Cause, Config, Console, Data, Effect, Option } from 'effect'
 
-const samplePdfRelativePath = 'data/pdfs/Matemáticas2010.pdf'
-
-export type SampleOcrPageAssetKind = 'image' | 'table'
-
-export interface SampleOcrPageAsset {
-  kind: SampleOcrPageAssetKind
-  pageNumber: number
-  label: string
-  filePath: string | null
-  markdownContent: string | null
-  sourceAssetId: string
-}
-
-export interface SampleOcrPage {
-  pageNumber: number
-  markdown: string
-  assets: SampleOcrPageAsset[]
-}
-
-export interface SampleOcrPageArtifact {
-  pageNumber: number
-  markdownPath: string
-  imageCount: number
-  tableCount: number
-}
-
-export interface SampleOcrRunSummary {
-  sourcePdf: string
-  generatedAt: string
-  rawResponsePath: string
-  pages: SampleOcrPageArtifact[]
-}
-
-export interface SampleOcrPaths {
-  packageRoot: string
-  repoRoot: string
-  pdfPath: string
-  artifactRoot: string
-  rawDir: string
-  assetsDir: string
-  pagesDir: string
-  summaryPath: string
-}
-
-export interface SampleOcrRunResult {
-  summary: SampleOcrRunSummary
-  markdownDir: string
-  pageCount: number
-}
+const samplePdfRelativePath = 'data/pdfs/Matemáticas2010.pdf'
 
 export class SampleOcrError extends Data.TaggedError('SampleOcrError')<{
   code:
-    | 'ASSET_WRITE_FAILED'
     | 'ARTIFACT_SETUP_FAILED'
-    | 'ARTIFACT_WRITE_FAILED'
+    | 'ASSET_WRITE_FAILED'
+    | 'MARKDOWN_WRITE_FAILED'
     | 'MISSING_MISTRAL_API_KEY'
     | 'OCR_REQUEST_FAILED'
     | 'PDF_NOT_FOUND'
@@ -68,6 +19,15 @@ export class SampleOcrError extends Data.TaggedError('SampleOcrError')<{
   message: string
   details?: Record<string, unknown>
 }> {}
+
+export interface SampleOcrPaths {
+  packageRoot: string
+  repoRoot: string
+  pdfPath: string
+  artifactRoot: string
+  assetsDir: string
+  pagesDir: string
+}
 
 export function getSampleOcrPaths(): SampleOcrPaths {
   const srcDir = path.dirname(fileURLToPath(import.meta.url))
@@ -85,15 +45,21 @@ export function getSampleOcrPaths(): SampleOcrPaths {
     repoRoot,
     pdfPath: path.join(repoRoot, samplePdfRelativePath),
     artifactRoot,
-    rawDir: path.join(artifactRoot, 'raw'),
     assetsDir: path.join(artifactRoot, 'assets'),
     pagesDir: path.join(artifactRoot, 'pages'),
-    summaryPath: path.join(artifactRoot, 'pages.json'),
   }
 }
 
-function toRepoRelativePath(repoRoot: string, absolutePath: string) {
-  return path.relative(repoRoot, absolutePath).split(path.sep).join('/')
+function failSampleOcr(
+  code: SampleOcrError['code'],
+  message: string,
+  details?: Record<string, unknown>,
+) {
+  return new SampleOcrError({ code, message, details })
+}
+
+function fileSystemCause(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function decodeBase64Payload(base64Payload: string) {
@@ -140,17 +106,6 @@ function detectImageExtension(imageBuffer: Buffer) {
   return 'bin'
 }
 
-function countAssetsByKind(
-  assets: SampleOcrPageAsset[],
-  kind: SampleOcrPageAssetKind,
-) {
-  return assets.filter((asset) => asset.kind === kind).length
-}
-
-export function buildRawResponseFileName() {
-  return 'ocr-response.json'
-}
-
 export function buildImageAssetFileName(
   pageNumber: number,
   imageIndex: number,
@@ -163,127 +118,13 @@ export function buildPageMarkdownFileName(pageNumber: number) {
   return `page-${String(pageNumber).padStart(2, '0')}.md`
 }
 
-function renderAssetMarkdown(
-  asset: SampleOcrPageAsset,
-  resolveMarkdownAssetPath: (asset: SampleOcrPageAsset) => string | null,
-) {
-  if (asset.kind === 'table') {
-    return [
-      `### ${asset.label}`,
-      '',
-      `Source asset id: ${asset.sourceAssetId}`,
-      '',
-      asset.markdownContent ?? '_No table markdown returned._',
-      '',
-    ]
-  }
-
-  const markdownAssetPath = resolveMarkdownAssetPath(asset)
-
-  return [
-    `### ${asset.label}`,
-    '',
-    `Source asset id: ${asset.sourceAssetId}`,
-    '',
-    markdownAssetPath
-      ? `![${asset.label}](${markdownAssetPath})`
-      : '> Image bytes were not returned for this asset.',
-    '',
-  ]
-}
-
-function rewriteInlineImageLinks(
-  markdown: string,
-  assets: SampleOcrPageAsset[],
-  resolveMarkdownAssetPath: (asset: SampleOcrPageAsset) => string | null,
-) {
-  let rewrittenMarkdown = markdown
-
-  for (const asset of assets) {
-    if (asset.kind !== 'image') {
-      continue
-    }
-
-    const markdownAssetPath = resolveMarkdownAssetPath(asset)
-
-    if (markdownAssetPath === null) {
-      continue
-    }
-
-    rewrittenMarkdown = rewrittenMarkdown.replaceAll(
-      `(${asset.sourceAssetId})`,
-      `(${markdownAssetPath})`,
-    )
-  }
-
-  return rewrittenMarkdown
-}
-
-export function renderPageMarkdown(
-  page: SampleOcrPage,
-  resolveMarkdownAssetPath: (asset: SampleOcrPageAsset) => string | null,
-) {
-  const rewrittenMarkdown = rewriteInlineImageLinks(
-    page.markdown.trim(),
-    page.assets,
-    resolveMarkdownAssetPath,
-  )
-  const lines = [
-    '---',
-    `pageNumber: ${page.pageNumber}`,
-    `imageCount: ${countAssetsByKind(page.assets, 'image')}`,
-    `tableCount: ${countAssetsByKind(page.assets, 'table')}`,
-    '---',
-    '',
-    `# Page ${page.pageNumber}`,
-    '',
-    '## OCR Text',
-    '',
-    rewrittenMarkdown,
-  ]
-
-  const tables = page.assets.filter((asset) => asset.kind === 'table')
-  const images = page.assets.filter((asset) => asset.kind === 'image')
-
-  if (tables.length > 0) {
-    lines.push('', '## Tables', '')
-    for (const table of tables) {
-      lines.push(...renderAssetMarkdown(table, resolveMarkdownAssetPath))
-    }
-  }
-
-  if (images.length > 0) {
-    lines.push('', '## Images', '')
-    for (const image of images) {
-      lines.push(...renderAssetMarkdown(image, resolveMarkdownAssetPath))
-    }
-  }
-
-  return `${lines.join('\n').trimEnd()}\n`
-}
-
-function failSampleOcr(
-  code: SampleOcrError['code'],
-  message: string,
-  details?: Record<string, unknown>,
-) {
-  return new SampleOcrError({ code, message, details })
-}
-
-function fileSystemCause(error: unknown) {
-  return error instanceof Error ? error.message : String(error)
-}
-
 function loadRequiredEnvVar(key: string) {
   return Config.string(key).pipe(
     Effect.mapError((error) =>
       failSampleOcr(
         'MISSING_MISTRAL_API_KEY',
         'MISTRAL_API_KEY is missing from configuration.',
-        {
-          key,
-          cause: String(error),
-        },
+        { key, cause: String(error) },
       ),
     ),
   )
@@ -299,10 +140,7 @@ function loadPdfDocumentUrl(pdfPath: string) {
             ? 'PDF_NOT_FOUND'
             : 'PDF_READ_FAILED',
           'Unable to read the sample PDF.',
-          {
-            pdfPath,
-            cause: fileSystemCause(error),
-          },
+          { pdfPath, cause: fileSystemCause(error) },
         ),
       ),
     )
@@ -323,173 +161,22 @@ function resetArtifactDirectories(paths: SampleOcrPaths) {
         failSampleOcr(
           'ARTIFACT_SETUP_FAILED',
           'Failed to prepare OCR artifact directories.',
-          {
-            artifactRoot: paths.artifactRoot,
-            cause: fileSystemCause(error),
-          },
+          { artifactRoot: paths.artifactRoot, cause: fileSystemCause(error) },
         ),
       ),
     )
 
-    yield* fs.makeDirectory(paths.rawDir, { recursive: true }).pipe(
-      Effect.mapError((error) =>
-        failSampleOcr(
-          'ARTIFACT_SETUP_FAILED',
-          'Failed to prepare OCR artifact directories.',
-          {
-            artifactRoot: paths.artifactRoot,
-            cause: fileSystemCause(error),
-          },
-        ),
-      ),
-    )
-    yield* fs.makeDirectory(paths.assetsDir, { recursive: true }).pipe(
-      Effect.mapError((error) =>
-        failSampleOcr(
-          'ARTIFACT_SETUP_FAILED',
-          'Failed to prepare OCR artifact directories.',
-          {
-            artifactRoot: paths.artifactRoot,
-            cause: fileSystemCause(error),
-          },
-        ),
-      ),
-    )
-    yield* fs.makeDirectory(paths.pagesDir, { recursive: true }).pipe(
-      Effect.mapError((error) =>
-        failSampleOcr(
-          'ARTIFACT_SETUP_FAILED',
-          'Failed to prepare OCR artifact directories.',
-          {
-            artifactRoot: paths.artifactRoot,
-            cause: fileSystemCause(error),
-          },
-        ),
-      ),
-    )
-  })
-}
-
-function writeJsonArtifact(filePath: string, payload: unknown) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem
-    yield* fs.writeFileString(filePath, `${JSON.stringify(payload, null, 2)}\n`).pipe(
-      Effect.mapError((error) =>
-        failSampleOcr('ARTIFACT_WRITE_FAILED', 'Failed to write JSON artifact.', {
-          filePath,
-          cause: fileSystemCause(error),
-        }),
-      ),
-    )
-  })
-}
-
-function writePageMarkdownArtifacts(args: {
-  pages: SampleOcrPage[]
-  pagesDir: string
-  repoRoot: string
-}) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem
-
-    for (const page of args.pages) {
-      const markdownPath = path.join(
-        args.pagesDir,
-        buildPageMarkdownFileName(page.pageNumber),
-      )
-      const markdown = renderPageMarkdown(page, (asset) => {
-        if (asset.filePath === null) {
-          return null
-        }
-
-        const absoluteAssetPath = path.join(args.repoRoot, asset.filePath)
-        return path.relative(args.pagesDir, absoluteAssetPath).split(path.sep).join('/')
-      })
-
-      yield* fs.writeFileString(markdownPath, markdown).pipe(
+    for (const dir of [paths.assetsDir, paths.pagesDir]) {
+      yield* fs.makeDirectory(dir, { recursive: true }).pipe(
         Effect.mapError((error) =>
           failSampleOcr(
-            'ARTIFACT_WRITE_FAILED',
-            'Failed to write page markdown artifacts.',
-            {
-              pagesDir: args.pagesDir,
-              cause: fileSystemCause(error),
-            },
+            'ARTIFACT_SETUP_FAILED',
+            'Failed to prepare OCR artifact directories.',
+            { dir, cause: fileSystemCause(error) },
           ),
         ),
       )
     }
-  })
-}
-
-function persistPageAssets(args: {
-  response: OCRResponse
-  assetsDir: string
-  repoRoot: string
-}) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem
-    const pages: SampleOcrPage[] = []
-
-    for (const page of args.response.pages) {
-      const pageNumber = page.index + 1
-      const assets: SampleOcrPageAsset[] = []
-
-      for (const [imageIndex, image] of page.images.entries()) {
-        let filePath: string | null = null
-
-        if (image.imageBase64 !== null && image.imageBase64 !== undefined) {
-          const imageBuffer = decodeBase64Payload(image.imageBase64)
-          const extension = detectImageExtension(imageBuffer)
-          const absolutePath = path.join(
-            args.assetsDir,
-            buildImageAssetFileName(pageNumber, imageIndex, extension),
-          )
-
-          yield* fs.writeFile(absolutePath, imageBuffer).pipe(
-            Effect.mapError((error) =>
-              failSampleOcr(
-                'ASSET_WRITE_FAILED',
-                'Failed to persist OCR page assets.',
-                {
-                  assetsDir: args.assetsDir,
-                  cause: fileSystemCause(error),
-                },
-              ),
-            ),
-          )
-          filePath = toRepoRelativePath(args.repoRoot, absolutePath)
-        }
-
-        assets.push({
-          kind: 'image',
-          pageNumber,
-          label: `Image ${imageIndex + 1}`,
-          filePath,
-          markdownContent: null,
-          sourceAssetId: image.id,
-        })
-      }
-
-      for (const [tableIndex, table] of (page.tables ?? []).entries()) {
-        assets.push({
-          kind: 'table',
-          pageNumber,
-          label: `Table ${tableIndex + 1}`,
-          filePath: null,
-          markdownContent: table.content.trim(),
-          sourceAssetId: table.id,
-        })
-      }
-
-      pages.push({
-        pageNumber,
-        markdown: page.markdown.trim(),
-        assets,
-      })
-    }
-
-    return pages.sort((left, right) => left.pageNumber - right.pageNumber)
   })
 }
 
@@ -512,36 +199,95 @@ function requestOcr(args: { apiKey: string; documentUrl: string }) {
   })
 }
 
-function buildPageArtifacts(
-  pages: SampleOcrPage[],
-  paths: SampleOcrPaths,
-): SampleOcrPageArtifact[] {
-  return pages.map((page) => ({
-    pageNumber: page.pageNumber,
-    markdownPath: toRepoRelativePath(
-      paths.repoRoot,
-      path.join(paths.pagesDir, buildPageMarkdownFileName(page.pageNumber)),
-    ),
-    imageCount: countAssetsByKind(page.assets, 'image'),
-    tableCount: countAssetsByKind(page.assets, 'table'),
-  }))
+/**
+ * Saves extracted images for a page to the assets directory. Returns a map
+ * from the Mistral asset id (e.g. "img-0.jpeg") to the relative path from
+ * the pages directory to the saved file, so image links in the markdown can
+ * be rewritten.
+ */
+function savePageImages(args: {
+  pageNumber: number
+  images: { id: string; imageBase64?: string | null }[]
+  assetsDir: string
+  pagesDir: string
+}) {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    const idToRelativePath = new Map<string, string>()
+
+    for (const [index, image] of args.images.entries()) {
+      if (image.imageBase64 === null || image.imageBase64 === undefined) {
+        continue
+      }
+
+      const imageBuffer = decodeBase64Payload(image.imageBase64)
+      const extension = detectImageExtension(imageBuffer)
+      const fileName = buildImageAssetFileName(args.pageNumber, index, extension)
+      const absolutePath = path.join(args.assetsDir, fileName)
+
+      yield* fs.writeFile(absolutePath, imageBuffer).pipe(
+        Effect.mapError((error) =>
+          failSampleOcr('ASSET_WRITE_FAILED', 'Failed to save image asset.', {
+            fileName,
+            cause: fileSystemCause(error),
+          }),
+        ),
+      )
+
+      const relativePath = path
+        .relative(args.pagesDir, absolutePath)
+        .split(path.sep)
+        .join('/')
+
+      idToRelativePath.set(image.id, relativePath)
+    }
+
+    return idToRelativePath
+  })
 }
 
-function buildRunSummary(args: {
-  paths: SampleOcrPaths
-  rawResponsePath: string
-  pages: SampleOcrPage[]
-}): SampleOcrRunSummary {
-  return {
-    sourcePdf: samplePdfRelativePath,
-    generatedAt: new Date().toISOString(),
-    rawResponsePath: toRepoRelativePath(args.paths.repoRoot, args.rawResponsePath),
-    pages: buildPageArtifacts(args.pages, args.paths),
+/**
+ * Rewrites Mistral placeholder image links in the page markdown to point at
+ * the locally saved asset files.
+ */
+function rewriteImageLinks(
+  markdown: string,
+  idToRelativePath: Map<string, string>,
+) {
+  let result = markdown
+  for (const [id, relativePath] of idToRelativePath) {
+    result = result.replaceAll(`(${id})`, `(${relativePath})`)
   }
+  return result
+}
+
+/**
+ * Builds the full markdown content for a page: the OCR text (with rewritten
+ * image links) followed by any separately-extracted tables.
+ */
+export function buildPageMarkdown(args: {
+  pageNumber: number
+  markdown: string
+  tables: { id: string; content: string }[]
+  idToRelativePath: Map<string, string>
+}) {
+  const rewritten = rewriteImageLinks(args.markdown.trim(), args.idToRelativePath)
+
+  const lines = [`# Page ${args.pageNumber}`, '', rewritten]
+
+  if (args.tables.length > 0) {
+    lines.push('', '## Tables', '')
+    for (const table of args.tables) {
+      lines.push(`<!-- ${table.id} -->`, '', table.content.trim(), '')
+    }
+  }
+
+  return `${lines.join('\n').trimEnd()}\n`
 }
 
 export function runSampleOcr(paths: SampleOcrPaths = getSampleOcrPaths()) {
   return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
     const apiKey = yield* loadRequiredEnvVar('MISTRAL_API_KEY')
     const documentUrl = yield* loadPdfDocumentUrl(paths.pdfPath)
 
@@ -549,34 +295,40 @@ export function runSampleOcr(paths: SampleOcrPaths = getSampleOcrPaths()) {
 
     const response = yield* requestOcr({ apiKey, documentUrl })
 
-    const rawResponsePath = path.join(paths.rawDir, buildRawResponseFileName())
-    yield* writeJsonArtifact(rawResponsePath, response)
+    for (const page of response.pages) {
+      const pageNumber = page.index + 1
 
-    const pages = yield* persistPageAssets({
-      response,
-      assetsDir: paths.assetsDir,
-      repoRoot: paths.repoRoot,
-    })
+      const idToRelativePath = yield* savePageImages({
+        pageNumber,
+        images: page.images,
+        assetsDir: paths.assetsDir,
+        pagesDir: paths.pagesDir,
+      })
 
-    yield* writePageMarkdownArtifacts({
-      pages,
-      pagesDir: paths.pagesDir,
-      repoRoot: paths.repoRoot,
-    })
+      const markdown = buildPageMarkdown({
+        pageNumber,
+        markdown: page.markdown,
+        tables: (page.tables ?? []).map((t) => ({ id: t.id, content: t.content })),
+        idToRelativePath,
+      })
 
-    const summary = buildRunSummary({
-      paths,
-      rawResponsePath,
-      pages,
-    })
+      const markdownPath = path.join(
+        paths.pagesDir,
+        buildPageMarkdownFileName(pageNumber),
+      )
 
-    yield* writeJsonArtifact(paths.summaryPath, summary)
+      yield* fs.writeFileString(markdownPath, markdown).pipe(
+        Effect.mapError((error) =>
+          failSampleOcr(
+            'MARKDOWN_WRITE_FAILED',
+            'Failed to write page markdown.',
+            { markdownPath, cause: fileSystemCause(error) },
+          ),
+        ),
+      )
+    }
 
-    return {
-      summary,
-      markdownDir: toRepoRelativePath(paths.repoRoot, paths.pagesDir),
-      pageCount: pages.length,
-    } satisfies SampleOcrRunResult
+    return { pageCount: response.pages.length }
   })
 }
 
@@ -610,16 +362,7 @@ async function runCli() {
         },
         onSuccess: (result) =>
           Console.log(
-            JSON.stringify(
-              {
-                status: 'ok',
-                rawResponsePath: result.summary.rawResponsePath,
-                markdownDir: result.markdownDir,
-                pageCount: result.pageCount,
-              },
-              null,
-              2,
-            ),
+            JSON.stringify({ status: 'ok', pageCount: result.pageCount }, null, 2),
           ),
       }),
       Effect.provide(NodeFileSystem.layer),
