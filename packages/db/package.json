@@ -12,8 +12,14 @@
     "test": "node --eval \"console.log('No tests yet for @aprendo/db')\"",
     "db:migrate": "tsx src/migrations.ts"
   },
+  "dependencies": {
+    "drizzle-orm": "beta",
+    "pg": "^8.16.3"
+  },
   "devDependencies": {
     "@types/node": "^24.3.1",
+    "@types/pg": "^8.15.6",
+    "drizzle-kit": "beta",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   }

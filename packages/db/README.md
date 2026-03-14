@@ -4,10 +4,24 @@ Shared database boundary for Aprendo.
 
 ## Current status
 
-This package is intentionally a placeholder. It defines content-focused TypeScript types and dummy functions so other workspace packages can depend on a stable module boundary before real Drizzle and PostgreSQL logic is added.
+This package now contains the first-pass Drizzle schema for the question bank domain.
 
 ## Planned responsibility
 
 - own Drizzle schema and migrations
 - expose server-side database utilities
 - centralize shared content-domain types
+
+## Current schema
+
+- `source_documents`
+- `questions`
+- `question_options`
+- `question_assets`
+
+The schema is intentionally simple:
+
+- each question is fully self-contained
+- shared context is duplicated into each question row
+- assets belong directly to a question, and optionally to one of its options
+- asset bytes are expected to live outside Postgres, with Postgres storing metadata and a stable `storage_key`
