@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run dev --filter=@aprendo/web",
+    "dev": "turbo run dev --ui tui",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
