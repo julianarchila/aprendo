@@ -1,10 +1,11 @@
-import { listQuestions } from '@aprendo/db'
 import { createServerFn } from '@tanstack/react-start'
 
 export const getDashboardSnapshot = createServerFn({
   method: 'GET',
 }).handler(async () => {
-  const questions = listQuestions()
+  const questions = [
+    {topic: 'Critical reading'},
+  ]
 
   return {
     questionCount: questions.length,

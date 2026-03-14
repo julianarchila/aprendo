@@ -18,7 +18,7 @@ function DashboardPage() {
         </h1>
         <p className="max-w-3xl text-base leading-8 text-[var(--sea-ink-soft)]">
           This route proves the initial server boundary. The page loads
-          placeholder data from a server function that imports `@aprendo/db`.
+          placeholder data from a server function .
         </p>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-3">

@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.43",
-    "@aprendo/db": "workspace:*",
     "@effect/platform": "^0.94.5",
     "@effect/platform-node": "^0.104.1",
     "@mistralai/mistralai": "^1.14.1",
