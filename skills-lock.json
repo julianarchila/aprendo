@@ -10,6 +10,11 @@
       "source": "waynesutton/convexskills",
       "sourceType": "github",
       "computedHash": "de7a20d081cd19bf8bce4038bd62d038a0a88f218f85afb35320d09b052fb534"
+    },
+    "convex-file-storage": {
+      "source": "waynesutton/convexskills",
+      "sourceType": "github",
+      "computedHash": "a541556841d1a907059f73ef4a428a4655b3355baf160e5c0aca1cac86054c0b"
     }
   }
 }
