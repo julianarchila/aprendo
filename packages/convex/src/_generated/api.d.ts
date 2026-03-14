@@ -8,9 +8,12 @@
  * @module
  */
 
+import type * as diagnostics from "../diagnostics.js";
 import type * as myFunctions from "../myFunctions.js";
 import type * as pdfPipeline from "../pdfPipeline.js";
 import type * as pdfs from "../pdfs.js";
+import type * as progress from "../progress.js";
+import type * as students from "../students.js";
 import type * as validators from "../validators.js";
 
 import type {
@@ -20,9 +23,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  diagnostics: typeof diagnostics;
   myFunctions: typeof myFunctions;
   pdfPipeline: typeof pdfPipeline;
   pdfs: typeof pdfs;
+  progress: typeof progress;
+  students: typeof students;
   validators: typeof validators;
 }>;
 

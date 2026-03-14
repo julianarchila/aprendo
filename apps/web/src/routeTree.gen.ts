@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UploadPdfsRouteImport } from './routes/upload-pdfs'
 import { Route as QuestionsRouteImport } from './routes/questions'
+import { Route as ProgressRouteImport } from './routes/progress'
+import { Route as DiagnosticRouteImport } from './routes/diagnostic'
 import { Route as IndexRouteImport } from './routes/index'
 
 const UploadPdfsRoute = UploadPdfsRouteImport.update({
@@ -23,6 +25,16 @@ const QuestionsRoute = QuestionsRouteImport.update({
   path: '/questions',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProgressRoute = ProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiagnosticRoute = DiagnosticRouteImport.update({
+  id: '/diagnostic',
+  path: '/diagnostic',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,30 +43,44 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/diagnostic': typeof DiagnosticRoute
+  '/progress': typeof ProgressRoute
   '/questions': typeof QuestionsRoute
   '/upload-pdfs': typeof UploadPdfsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/diagnostic': typeof DiagnosticRoute
+  '/progress': typeof ProgressRoute
   '/questions': typeof QuestionsRoute
   '/upload-pdfs': typeof UploadPdfsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/diagnostic': typeof DiagnosticRoute
+  '/progress': typeof ProgressRoute
   '/questions': typeof QuestionsRoute
   '/upload-pdfs': typeof UploadPdfsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/questions' | '/upload-pdfs'
+  fullPaths: '/' | '/diagnostic' | '/progress' | '/questions' | '/upload-pdfs'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/questions' | '/upload-pdfs'
-  id: '__root__' | '/' | '/questions' | '/upload-pdfs'
+  to: '/' | '/diagnostic' | '/progress' | '/questions' | '/upload-pdfs'
+  id:
+    | '__root__'
+    | '/'
+    | '/diagnostic'
+    | '/progress'
+    | '/questions'
+    | '/upload-pdfs'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DiagnosticRoute: typeof DiagnosticRoute
+  ProgressRoute: typeof ProgressRoute
   QuestionsRoute: typeof QuestionsRoute
   UploadPdfsRoute: typeof UploadPdfsRoute
 }
@@ -75,6 +101,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QuestionsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/progress': {
+      id: '/progress'
+      path: '/progress'
+      fullPath: '/progress'
+      preLoaderRoute: typeof ProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diagnostic': {
+      id: '/diagnostic'
+      path: '/diagnostic'
+      fullPath: '/diagnostic'
+      preLoaderRoute: typeof DiagnosticRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +127,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DiagnosticRoute: DiagnosticRoute,
+  ProgressRoute: ProgressRoute,
   QuestionsRoute: QuestionsRoute,
   UploadPdfsRoute: UploadPdfsRoute,
 }

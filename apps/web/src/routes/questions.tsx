@@ -147,6 +147,32 @@ function QuestionsPage() {
                     </Link>
                   </div>
                 </div>
+                <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.12em]">
+                  <span className="rounded-full border border-[rgba(23,58,64,0.12)] bg-white px-3 py-1 text-[var(--sea-ink-soft)]">
+                    eligibility: {browser.question.eligibility ?? 'legacy'}
+                  </span>
+                  <span className="rounded-full border border-[rgba(23,58,64,0.12)] bg-white px-3 py-1 text-[var(--sea-ink-soft)]">
+                    answer: {browser.question.answerStatus ?? 'legacy'}
+                  </span>
+                  <span className="rounded-full border border-[rgba(23,58,64,0.12)] bg-white px-3 py-1 text-[var(--sea-ink-soft)]">
+                    taxonomy: {browser.question.taxonomyStatus ?? 'legacy'}
+                  </span>
+                  {browser.question.subjectId ? (
+                    <span className="rounded-full border border-[rgba(79,184,178,0.24)] bg-[rgba(79,184,178,0.12)] px-3 py-1 text-[var(--lagoon-deep)]">
+                      {browser.question.subjectId}
+                    </span>
+                  ) : null}
+                  {browser.question.primarySubtopicId ? (
+                    <span className="rounded-full border border-[rgba(235,122,111,0.24)] bg-[rgba(235,122,111,0.12)] px-3 py-1 text-[color:#b4534a]">
+                      {browser.question.primarySubtopicId}
+                    </span>
+                  ) : null}
+                  {browser.question.answerCorrectOption ? (
+                    <span className="rounded-full border border-[rgba(47,106,74,0.24)] bg-[rgba(47,106,74,0.12)] px-3 py-1 text-[var(--palm)]">
+                      correct: {browser.question.answerCorrectOption}
+                    </span>
+                  ) : null}
+                </div>
               </section>
 
               <section className="island-shell rounded-2xl p-6">

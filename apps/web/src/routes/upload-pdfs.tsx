@@ -142,6 +142,10 @@ function UploadPdfsPage() {
                     {Math.ceil(upload.sizeBytes / 1024)} KB
                     {upload.questionCount != null ? ` · ${upload.questionCount} questions` : ''}
                     {upload.assetCount != null ? ` · ${upload.assetCount} assets` : ''}
+                    {upload.answerCompletedCount != null ? ` · ${upload.answerCompletedCount} answers` : ''}
+                    {upload.taxonomyCompletedCount != null ? ` · ${upload.taxonomyCompletedCount} tagged` : ''}
+                    {upload.diagnosticEligibleCount != null ? ` · ${upload.diagnosticEligibleCount} diagnostic-ready` : ''}
+                    {upload.excludedQuestionCount != null ? ` · ${upload.excludedQuestionCount} excluded` : ''}
                   </p>
                   {upload.errorMessage ? (
                     <p className="mt-2 mb-0 text-sm font-semibold text-[color:#9a3d3d]">

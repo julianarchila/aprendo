@@ -70,7 +70,7 @@ export const retryPdfUpload = mutation({
       throw new Error('PDF upload not found.')
     }
 
-    if (upload.status === 'processing') {
+    if (upload.status === 'processing' || upload.status === 'enriching') {
       throw new Error('PDF is already processing.')
     }
 
@@ -238,15 +238,229 @@ export const markPdfCompleted = internalMutation({
   handler: async (ctx, args) => {
     const now = Date.now()
     await ctx.db.patch(args.pdfUploadId, {
-      status: 'completed',
+      status: 'enriching',
       pageCount: args.pageCount,
       assetCount: args.assetCount,
       questionCount: args.questionCount,
       ocrPagesStorageId: args.ocrPagesStorageId,
       rawQuestionsStorageId: args.rawQuestionsStorageId,
       processedAt: now,
+      enrichmentStartedAt: now,
       updatedAt: now,
     })
+  },
+})
+
+export const markPdfEnriching = internalMutation({
+  args: {
+    pdfUploadId: v.id('pdfUploads'),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now()
+    await ctx.db.patch(args.pdfUploadId, {
+      status: 'enriching',
+      enrichmentStartedAt: now,
+      updatedAt: now,
+    })
+  },
+})
+
+export const getPdfQuestionIds = internalQuery({
+  args: {
+    pdfUploadId: v.id('pdfUploads'),
+  },
+  handler: async (ctx, args) => {
+    const questions = await ctx.db
+      .query('questions')
+      .withIndex('by_pdfUploadId_sequence', (q) => q.eq('pdfUploadId', args.pdfUploadId))
+      .collect()
+
+    return questions.map((question) => question._id)
+  },
+})
+
+export const getQuestionsForEnrichment = internalQuery({
+  args: {
+    questionIds: v.array(v.id('questions')),
+  },
+  handler: async (ctx, args) => {
+    const questions = await Promise.all(
+      args.questionIds.map((questionId) => ctx.db.get(questionId)),
+    )
+
+    return questions.filter((question): question is Doc<'questions'> => question != null)
+  },
+})
+
+export const setQuestionAnswerProcessing = internalMutation({
+  args: {
+    questionId: v.id('questions'),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.questionId, {
+      answerStatus: 'processing',
+      answerErrorMessage: undefined,
+    })
+  },
+})
+
+export const setQuestionAnswerResult = internalMutation({
+  args: {
+    questionId: v.id('questions'),
+    status: v.union(v.literal('completed'), v.literal('failed'), v.literal('needs_review')),
+    correctOption: v.optional(v.string()),
+    solutionMarkdown: v.optional(v.string()),
+    confidence: v.optional(v.number()),
+    modelId: v.optional(v.string()),
+    promptVersion: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.questionId, {
+      answerStatus: args.status,
+      answerCorrectOption: args.correctOption,
+      answerSolutionMarkdown: args.solutionMarkdown,
+      answerConfidence: args.confidence,
+      answerModelId: args.modelId,
+      answerPromptVersion: args.promptVersion,
+      answerCompletedAt: Date.now(),
+      answerErrorMessage: args.errorMessage,
+    })
+  },
+})
+
+export const setQuestionTaxonomyProcessing = internalMutation({
+  args: {
+    questionId: v.id('questions'),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.questionId, {
+      taxonomyStatus: 'processing',
+      taxonomyErrorMessage: undefined,
+    })
+  },
+})
+
+export const setQuestionTaxonomyResult = internalMutation({
+  args: {
+    questionId: v.id('questions'),
+    status: v.union(v.literal('completed'), v.literal('failed'), v.literal('needs_review')),
+    taxonomyVersion: v.optional(v.string()),
+    taxonomyRelease: v.optional(v.string()),
+    subjectId: v.optional(v.string()),
+    categoryId: v.optional(v.string()),
+    primarySubtopicId: v.optional(v.string()),
+    secondarySubtopicIds: v.optional(v.array(v.string())),
+    secondaryDimensions: v.optional(v.array(v.object({
+      dimension: v.string(),
+      value: v.string(),
+    }))),
+    confidence: v.optional(v.number()),
+    modelId: v.optional(v.string()),
+    promptVersion: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.questionId, {
+      taxonomyStatus: args.status,
+      taxonomyVersion: args.taxonomyVersion,
+      taxonomyRelease: args.taxonomyRelease,
+      subjectId: args.subjectId,
+      categoryId: args.categoryId,
+      primarySubtopicId: args.primarySubtopicId,
+      secondarySubtopicIds: args.secondarySubtopicIds,
+      secondaryDimensions: args.secondaryDimensions,
+      taggingConfidence: args.confidence,
+      taxonomyModelId: args.modelId,
+      taxonomyPromptVersion: args.promptVersion,
+      taxonomyCompletedAt: Date.now(),
+      taxonomyErrorMessage: args.errorMessage,
+    })
+  },
+})
+
+export const setQuestionEligibility = internalMutation({
+  args: {
+    questionId: v.id('questions'),
+    eligibility: v.union(
+      v.literal('pending'),
+      v.literal('diagnostic'),
+      v.literal('practice_only'),
+      v.literal('excluded'),
+    ),
+    reasons: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.questionId, {
+      eligibility: args.eligibility,
+      eligibilityReasons: args.reasons,
+      eligibilityEvaluatedAt: Date.now(),
+    })
+  },
+})
+
+export const refreshPdfEnrichmentStats = internalMutation({
+  args: {
+    pdfUploadId: v.id('pdfUploads'),
+  },
+  handler: async (ctx, args) => {
+    const questions = await ctx.db
+      .query('questions')
+      .withIndex('by_pdfUploadId', (q) => q.eq('pdfUploadId', args.pdfUploadId))
+      .collect()
+
+    const answerCompletedCount = questions.filter((question) => question.answerStatus === 'completed').length
+    const taxonomyCompletedCount = questions.filter((question) => question.taxonomyStatus === 'completed').length
+    const diagnosticEligibleCount = questions.filter((question) => question.eligibility === 'diagnostic').length
+    const excludedQuestionCount = questions.filter((question) => question.eligibility === 'excluded').length
+    const allQuestionsResolved = questions.every((question) =>
+      question.answerStatus !== 'pending'
+      && question.answerStatus !== 'processing'
+      && question.taxonomyStatus !== 'pending'
+      && question.taxonomyStatus !== 'processing'
+      && question.eligibility !== 'pending',
+    )
+
+    await ctx.db.patch(args.pdfUploadId, {
+      status: allQuestionsResolved ? 'completed' : 'enriching',
+      answerCompletedCount,
+      taxonomyCompletedCount,
+      diagnosticEligibleCount,
+      excludedQuestionCount,
+      enrichedAt: allQuestionsResolved ? Date.now() : undefined,
+      updatedAt: Date.now(),
+    })
+  },
+})
+
+export const getDiagnosticEligibleQuestionPool = internalQuery({
+  args: {
+    subjectId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.subjectId) {
+      return ctx.db
+        .query('questions')
+        .withIndex('by_subjectId_eligibility', (q) =>
+          q.eq('subjectId', args.subjectId).eq('eligibility', 'diagnostic'),
+        )
+        .collect()
+    }
+
+    const questions = await ctx.db.query('questions').collect()
+    return questions.filter((question) => question.eligibility === 'diagnostic')
+  },
+})
+
+export const getQuestionsByIds = internalQuery({
+  args: {
+    questionIds: v.array(v.id('questions')),
+  },
+  handler: async (ctx, args) => {
+    const questions = await Promise.all(
+      args.questionIds.map((questionId) => ctx.db.get(questionId)),
+    )
+    return questions.filter((question): question is Doc<'questions'> => question != null)
   },
 })
 
