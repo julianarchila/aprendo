@@ -9,7 +9,6 @@ import { ocrPdfBlob } from '../../ingest/src/ocr-core'
 import type { QuestionExtraction } from '../../ingest/src/question-schema'
 
 const QUESTION_INSERT_CHUNK_SIZE = 20
-const internalApi = internal as any
 
 function requireEnv(name: string) {
   const value = process.env[name]
@@ -77,7 +76,7 @@ export const processUploadedPdf = internalAction({
   },
   handler: async (ctx, args) => {
     try {
-      const upload = await ctx.runQuery(internalApi.pdfs.getPdfUploadForProcessing, {
+      const upload = await ctx.runQuery(internal.pdfs.getPdfUploadForProcessing, {
         pdfUploadId: args.pdfUploadId,
       })
 
@@ -85,7 +84,7 @@ export const processUploadedPdf = internalAction({
         throw new Error('PDF upload not found.')
       }
 
-      await ctx.runMutation(internalApi.pdfs.markPdfProcessing, {
+      await ctx.runMutation(internal.pdfs.markPdfProcessing, {
         pdfUploadId: args.pdfUploadId,
       })
 
@@ -172,7 +171,7 @@ export const processUploadedPdf = internalAction({
         }),
       )
 
-      await ctx.runMutation(internalApi.pdfs.clearPdfQuestions, {
+      await ctx.runMutation(internal.pdfs.clearPdfQuestions, {
         pdfUploadId: args.pdfUploadId,
       })
 
@@ -180,12 +179,12 @@ export const processUploadedPdf = internalAction({
         normalizedQuestions,
         QUESTION_INSERT_CHUNK_SIZE,
       )) {
-        await ctx.runMutation(internalApi.pdfs.insertPdfQuestionsChunk, {
+        await ctx.runMutation(internal.pdfs.insertPdfQuestionsChunk, {
           questions,
         })
       }
 
-      await ctx.runMutation(internalApi.pdfs.markPdfCompleted, {
+      await ctx.runMutation(internal.pdfs.markPdfCompleted, {
         pdfUploadId: args.pdfUploadId,
         pageCount: ocrResult.pageCount,
         assetCount: storedAssets.size,
@@ -194,7 +193,7 @@ export const processUploadedPdf = internalAction({
         rawQuestionsStorageId,
       })
     } catch (error) {
-      await ctx.runMutation(internalApi.pdfs.markPdfFailed, {
+      await ctx.runMutation(internal.pdfs.markPdfFailed, {
         pdfUploadId: args.pdfUploadId,
         message: formatError(error),
       })

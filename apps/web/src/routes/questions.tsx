@@ -1,21 +1,12 @@
-import { convexQuery } from '@convex-dev/react-query'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { api } from '@aprendo/convex/api'
 import MarkdownBlock from '../components/MarkdownBlock'
+import { pdfUploadsQuery, questionBrowserQuery } from '../lib/pdf-queries'
 
 type QuestionsSearch = {
   pdfUploadId?: string
   sequence?: number
 }
-
-const pdfUploadsQuery = () => convexQuery(api.pdfs.listPdfUploads, { limit: 50 })
-
-const questionBrowserQuery = (pdfUploadId: string, sequence: number) =>
-  convexQuery(api.pdfs.getQuestionBrowser, {
-    pdfUploadId: pdfUploadId as never,
-    sequence,
-  })
 
 export const Route = createFileRoute('/questions')({
   validateSearch: (search: Record<string, unknown>): QuestionsSearch => ({
@@ -33,7 +24,7 @@ export const Route = createFileRoute('/questions')({
     sequence: search.sequence ?? 1,
   }),
   loader: async ({ context: { queryClient }, deps }) => {
-    await queryClient.ensureQueryData(pdfUploadsQuery())
+    await queryClient.ensureQueryData(pdfUploadsQuery(50))
     if (deps.pdfUploadId) {
       await queryClient.ensureQueryData(
         questionBrowserQuery(deps.pdfUploadId, deps.sequence),
@@ -46,7 +37,7 @@ export const Route = createFileRoute('/questions')({
 
 function QuestionsPage() {
   const search = Route.useSearch()
-  const { data: uploads } = useSuspenseQuery(pdfUploadsQuery())
+  const { data: uploads } = useSuspenseQuery(pdfUploadsQuery(50))
   const selectedUploadId = search.pdfUploadId
   const selectedSequence = search.sequence ?? 1
   const completedUploads = uploads.filter((upload) => upload.questionCount != null && upload.questionCount > 0)

@@ -1,4 +1,4 @@
-import { convexQuery, useConvexMutation } from '@convex-dev/react-query'
+import { useConvexMutation } from '@convex-dev/react-query'
 import {
   useMutation,
   useQueryClient,
@@ -7,8 +7,8 @@ import {
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '@aprendo/convex/api'
-
-const pdfUploadsQuery = () => convexQuery(api.pdfs.listPdfUploads, { limit: 20 })
+import { pdfUploadsQuery } from '../lib/pdf-queries'
+import { uploadPdfToConvex } from '../lib/pdf-upload'
 
 export const Route = createFileRoute('/upload-pdfs')({
   component: UploadPdfsPage,
@@ -29,28 +29,10 @@ function UploadPdfsPage() {
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const uploadUrl = await generateUploadUrl({})
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': file.type || 'application/pdf',
-        },
-        body: file,
-      })
-
-      if (!uploadResponse.ok) {
-        throw new Error(`Failed to upload PDF binary (${uploadResponse.status}).`)
-      }
-
-      const { storageId } = (await uploadResponse.json()) as {
-        storageId: string
-      }
-
-      return createPdfUpload({
-        storageId: storageId as never,
-        fileName: file.name,
-        contentType: file.type || 'application/pdf',
-        sizeBytes: file.size,
+      return uploadPdfToConvex({
+        file,
+        generateUploadUrl,
+        createPdfUpload,
       })
     },
     onError: (error) => {

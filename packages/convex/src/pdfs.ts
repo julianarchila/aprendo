@@ -1,14 +1,13 @@
 import { mutation, query, internalMutation, internalQuery } from './_generated/server'
 import { v } from 'convex/values'
 import { internal } from './_generated/api'
+import type { Doc } from './_generated/dataModel'
 import { slugify } from '../../ingest/src/slug'
 import { questionDocumentValidator } from './validators'
 
-const internalApi = internal as any
-
 async function serializeUpload(
-  ctx: any,
-  upload: any,
+  ctx: { storage: { getUrl: (storageId: Doc<'pdfUploads'>['pdfStorageId']) => Promise<string | null> } },
+  upload: Doc<'pdfUploads'>,
 ) {
   const pdfUrl = await ctx.storage.getUrl(upload.pdfStorageId)
   const ocrPagesUrl = upload.ocrPagesStorageId
@@ -53,7 +52,7 @@ export const createPdfUpload = mutation({
       updatedAt: now,
     })
 
-    await ctx.scheduler.runAfter(0, internalApi.pdfPipeline.processUploadedPdf, {
+    await ctx.scheduler.runAfter(0, internal.pdfPipeline.processUploadedPdf, {
       pdfUploadId,
     })
 
@@ -81,7 +80,7 @@ export const retryPdfUpload = mutation({
       updatedAt: Date.now(),
     })
 
-    await ctx.scheduler.runAfter(0, internalApi.pdfPipeline.processUploadedPdf, {
+    await ctx.scheduler.runAfter(0, internal.pdfPipeline.processUploadedPdf, {
       pdfUploadId: args.pdfUploadId,
     })
   },
@@ -119,13 +118,9 @@ export const getPdfUploadDetail = query({
       )
       .take(5)
 
-    const previewQuestions = await Promise.all(
-      questions.map(async (question) => question),
-    )
-
     return {
       upload: await serializeUpload(ctx, upload),
-      previewQuestions,
+      previewQuestions: questions,
     }
   },
 })
@@ -141,14 +136,8 @@ export const getQuestionBrowser = query({
       return null
     }
 
-    const questions = await ctx.db
-      .query('questions')
-      .withIndex('by_pdfUploadId_sequence', (q) =>
-        q.eq('pdfUploadId', args.pdfUploadId),
-      )
-      .collect()
-
-    if (questions.length === 0) {
+    const totalQuestions = upload.questionCount ?? 0
+    if (totalQuestions === 0) {
       return {
         upload: await serializeUpload(ctx, upload),
         totalQuestions: 0,
@@ -159,13 +148,19 @@ export const getQuestionBrowser = query({
 
     const requestedSequence = Math.max(
       1,
-      Math.min(args.sequence ?? 1, questions.length),
+      Math.min(args.sequence ?? 1, totalQuestions),
     )
-    const currentQuestion = questions[requestedSequence - 1]
+
+    const currentQuestion = await ctx.db
+      .query('questions')
+      .withIndex('by_pdfUploadId_sequence', (q) =>
+        q.eq('pdfUploadId', args.pdfUploadId).eq('sequence', requestedSequence),
+      )
+      .unique()
     if (currentQuestion == null) {
       return {
         upload: await serializeUpload(ctx, upload),
-        totalQuestions: questions.length,
+        totalQuestions,
         currentSequence: requestedSequence,
         question: null,
       }
@@ -173,11 +168,9 @@ export const getQuestionBrowser = query({
 
     return {
       upload: await serializeUpload(ctx, upload),
-      totalQuestions: questions.length,
+      totalQuestions,
       currentSequence: requestedSequence,
-      question: {
-        ...currentQuestion,
-      },
+      question: currentQuestion,
     }
   },
 })
