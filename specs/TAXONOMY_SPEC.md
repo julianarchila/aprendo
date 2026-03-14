@@ -205,9 +205,9 @@ V1 does not require:
 
 The canonical source files for taxonomy in the repo are:
 
-- human-readable spec: [TAXONOMY_SPEC.md](/Users/julian/Dev/aprendo/specs/TAXONOMY_SPEC.md)
-- machine-readable V1 contract: [taxonomy.v1.json](/Users/julian/Dev/aprendo/docs/taxonomy.v1.json)
-- research source: [taxonomy-research.md](/Users/julian/Dev/aprendo/docs/taxonomy-research.md)
+- human-readable spec: [TAXONOMY_SPEC.md](specs/TAXONOMY_SPEC.md)
+- machine-readable V1 contract: [taxonomy.v1.json](docs/taxonomy.v1.json)
+- research source: [taxonomy-research.md](docs/taxonomy-research.md)
 
 ## Out Of Scope
 
