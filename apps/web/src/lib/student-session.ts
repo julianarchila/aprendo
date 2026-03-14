@@ -7,6 +7,10 @@ export interface StoredStudentSession {
   email: string
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
 function readStoredStudentSession() {
   if (typeof window === 'undefined') return null
 
@@ -15,11 +19,13 @@ function readStoredStudentSession() {
 
   try {
     const parsed = JSON.parse(rawValue) as StoredStudentSession
-    if (typeof parsed.studentId !== 'string' || typeof parsed.email !== 'string') {
+    if (!isNonEmptyString(parsed.studentId) || !isNonEmptyString(parsed.email)) {
+      window.localStorage.removeItem(STORAGE_KEY)
       return null
     }
     return parsed
   } catch {
+    window.localStorage.removeItem(STORAGE_KEY)
     return null
   }
 }
