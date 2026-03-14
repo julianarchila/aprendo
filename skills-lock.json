@@ -5,6 +5,11 @@
       "source": "vercel/ai",
       "sourceType": "github",
       "computedHash": "58ce68f628890c3925aea2b5435a649251ac182057541045c68fc19a27aaa0ec"
+    },
+    "convex": {
+      "source": "waynesutton/convexskills",
+      "sourceType": "github",
+      "computedHash": "de7a20d081cd19bf8bce4038bd62d038a0a88f218f85afb35320d09b052fb534"
     }
   }
 }
