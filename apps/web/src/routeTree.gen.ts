@@ -9,30 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as ConvexDemoRouteImport } from './routes/convex-demo'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AboutRouteImport } from './routes/about'
+import { Route as UploadPdfsRouteImport } from './routes/upload-pdfs'
+import { Route as QuestionsRouteImport } from './routes/questions'
 import { Route as IndexRouteImport } from './routes/index'
 
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const UploadPdfsRoute = UploadPdfsRouteImport.update({
+  id: '/upload-pdfs',
+  path: '/upload-pdfs',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ConvexDemoRoute = ConvexDemoRouteImport.update({
-  id: '/convex-demo',
-  path: '/convex-demo',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AboutRoute = AboutRouteImport.update({
-  id: '/about',
-  path: '/about',
+const QuestionsRoute = QuestionsRouteImport.update({
+  id: '/questions',
+  path: '/questions',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -43,70 +31,48 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/auth': typeof AuthRoute
-  '/convex-demo': typeof ConvexDemoRoute
-  '/dashboard': typeof DashboardRoute
+  '/questions': typeof QuestionsRoute
+  '/upload-pdfs': typeof UploadPdfsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/auth': typeof AuthRoute
-  '/convex-demo': typeof ConvexDemoRoute
-  '/dashboard': typeof DashboardRoute
+  '/questions': typeof QuestionsRoute
+  '/upload-pdfs': typeof UploadPdfsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/auth': typeof AuthRoute
-  '/convex-demo': typeof ConvexDemoRoute
-  '/dashboard': typeof DashboardRoute
+  '/questions': typeof QuestionsRoute
+  '/upload-pdfs': typeof UploadPdfsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/auth' | '/convex-demo' | '/dashboard'
+  fullPaths: '/' | '/questions' | '/upload-pdfs'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/auth' | '/convex-demo' | '/dashboard'
-  id: '__root__' | '/' | '/about' | '/auth' | '/convex-demo' | '/dashboard'
+  to: '/' | '/questions' | '/upload-pdfs'
+  id: '__root__' | '/' | '/questions' | '/upload-pdfs'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AboutRoute: typeof AboutRoute
-  AuthRoute: typeof AuthRoute
-  ConvexDemoRoute: typeof ConvexDemoRoute
-  DashboardRoute: typeof DashboardRoute
+  QuestionsRoute: typeof QuestionsRoute
+  UploadPdfsRoute: typeof UploadPdfsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
+    '/upload-pdfs': {
+      id: '/upload-pdfs'
+      path: '/upload-pdfs'
+      fullPath: '/upload-pdfs'
+      preLoaderRoute: typeof UploadPdfsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/convex-demo': {
-      id: '/convex-demo'
-      path: '/convex-demo'
-      fullPath: '/convex-demo'
-      preLoaderRoute: typeof ConvexDemoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/about': {
-      id: '/about'
-      path: '/about'
-      fullPath: '/about'
-      preLoaderRoute: typeof AboutRouteImport
+    '/questions': {
+      id: '/questions'
+      path: '/questions'
+      fullPath: '/questions'
+      preLoaderRoute: typeof QuestionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -121,10 +87,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AboutRoute: AboutRoute,
-  AuthRoute: AuthRoute,
-  ConvexDemoRoute: ConvexDemoRoute,
-  DashboardRoute: DashboardRoute,
+  QuestionsRoute: QuestionsRoute,
+  UploadPdfsRoute: UploadPdfsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -9,6 +9,9 @@
  */
 
 import type * as myFunctions from "../myFunctions.js";
+import type * as pdfPipeline from "../pdfPipeline.js";
+import type * as pdfs from "../pdfs.js";
+import type * as validators from "../validators.js";
 
 import type {
   ApiFromModules,
@@ -18,6 +21,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   myFunctions: typeof myFunctions;
+  pdfPipeline: typeof pdfPipeline;
+  pdfs: typeof pdfs;
+  validators: typeof validators;
 }>;
 
 /**

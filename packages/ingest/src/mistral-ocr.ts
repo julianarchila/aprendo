@@ -14,6 +14,26 @@ export interface OcrPaths {
   pagesDir: string
 }
 
+export interface OcrImageAsset {
+  pageNumber: number
+  imageIndex: number
+  fileName: string
+  contentType: string
+  sourcePath: string
+  blob: Blob
+}
+
+export interface OcrPage {
+  pageNumber: number
+  markdown: string
+  assets: OcrImageAsset[]
+}
+
+export interface OcrResult {
+  pageCount: number
+  pages: OcrPage[]
+}
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -88,6 +108,21 @@ function detectImageExtension(imageBuffer: Buffer) {
   }
 
   return 'bin'
+}
+
+function extensionToMimeType(extension: string) {
+  switch (extension) {
+    case 'png':
+      return 'image/png'
+    case 'jpg':
+      return 'image/jpeg'
+    case 'gif':
+      return 'image/gif'
+    case 'webp':
+      return 'image/webp'
+    default:
+      return 'application/octet-stream'
+  }
 }
 
 export function buildImageAssetFileName(
@@ -182,6 +217,68 @@ function requestOcr(args: { apiKey: string; documentUrl: string }) {
         cause: error instanceof Error ? error.message : String(error),
       }),
   })
+}
+
+async function blobToDocumentUrl(blob: Blob) {
+  const buffer = Buffer.from(await blob.arrayBuffer())
+  const contentType = blob.type || 'application/pdf'
+  return `data:${contentType};base64,${buffer.toString('base64')}`
+}
+
+export async function ocrPdfBlob(args: {
+  apiKey: string
+  pdfBlob: Blob
+}): Promise<OcrResult> {
+  const documentUrl = await blobToDocumentUrl(args.pdfBlob)
+  const response = await Effect.runPromise(
+    requestOcr({ apiKey: args.apiKey, documentUrl }),
+  )
+
+  const pages: OcrPage[] = response.pages.map((page) => {
+    const pageNumber = page.index + 1
+    const idToRelativePath = new Map<string, string>()
+    const assets: OcrImageAsset[] = []
+
+    for (const [index, image] of page.images.entries()) {
+      if (image.imageBase64 == null) continue
+
+      const imageBuffer = decodeBase64Payload(image.imageBase64)
+      const extension = detectImageExtension(imageBuffer)
+      const fileName = buildImageAssetFileName(pageNumber, index, extension)
+      const sourcePath = `../assets/${fileName}`
+
+      idToRelativePath.set(image.id, sourcePath)
+      assets.push({
+        pageNumber,
+        imageIndex: index + 1,
+        fileName,
+        contentType: extensionToMimeType(extension),
+        sourcePath,
+        blob: new Blob([imageBuffer], {
+          type: extensionToMimeType(extension),
+        }),
+      })
+    }
+
+    return {
+      pageNumber,
+      markdown: buildPageMarkdown({
+        pageNumber,
+        markdown: page.markdown,
+        tables: (page.tables ?? []).map((table) => ({
+          id: table.id,
+          content: table.content,
+        })),
+        idToRelativePath,
+      }),
+      assets,
+    }
+  })
+
+  return {
+    pageCount: pages.length,
+    pages,
+  }
 }
 
 // ---------------------------------------------------------------------------

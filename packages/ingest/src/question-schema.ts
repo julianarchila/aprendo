@@ -4,9 +4,10 @@ const OptionSchema = z.object({
   label: z.string().describe('The option letter: A, B, C, or D'),
   text: z
     .string()
+    .nullable()
     .optional()
     .describe(
-      'Text content of the option. Omit when the option is image-only.',
+      'Text content of the option. Use null or omit when the option is image-only.',
     ),
   images: z
     .array(z.string())

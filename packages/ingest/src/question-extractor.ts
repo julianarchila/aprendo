@@ -88,6 +88,10 @@ ${pagesMarkdown}
 </document>`
 }
 
+export function joinPagesMarkdown(pages: string[]): string {
+  return pages.join('\n\n---\n\n')
+}
+
 // ---------------------------------------------------------------------------
 // Read page markdown files
 // ---------------------------------------------------------------------------
@@ -128,7 +132,7 @@ function readPageMarkdownFiles(pagesDir: string) {
       pages.push(content)
     }
 
-    return pages.join('\n\n---\n\n')
+    return joinPagesMarkdown(pages)
   })
 }
 
@@ -165,6 +169,13 @@ function extractQuestions(args: { apiKey: string; pagesMarkdown: string }) {
         cause: error instanceof Error ? error.message : String(error),
       }),
   })
+}
+
+export async function extractQuestionsFromMarkdown(args: {
+  apiKey: string
+  pagesMarkdown: string
+}): Promise<QuestionExtraction[]> {
+  return Effect.runPromise(extractQuestions(args))
 }
 
 // ---------------------------------------------------------------------------

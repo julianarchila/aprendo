@@ -1,6 +1,8 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+@source "../../../node_modules/streamdown/dist/*.js";
+@source "../../../node_modules/@streamdown/math/dist/*.js";
 
 @theme {
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
@@ -256,4 +258,60 @@ a {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.markdown-body {
+  color: var(--sea-ink);
+  font-size: 0.95rem;
+  line-height: 1.85;
+}
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body table,
+.markdown-body pre,
+.markdown-body blockquote {
+  margin: 0 0 1rem;
+}
+
+.markdown-body img {
+  display: block;
+  width: 100%;
+  max-width: 32rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: color-mix(in oklab, var(--surface-strong) 86%, white 14%);
+  margin-top: 1rem;
+}
+
+.feature-card .markdown-body p:last-child,
+.feature-card .markdown-body ul:last-child,
+.feature-card .markdown-body ol:last-child,
+.feature-card .markdown-body table:last-child,
+.feature-card .markdown-body pre:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--line);
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.markdown-body pre {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: color-mix(in oklab, var(--surface-strong) 78%, white 22%);
 }

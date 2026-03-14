@@ -13,6 +13,7 @@
     "./dataModel": "./src/_generated/dataModel.js"
   },
   "dependencies": {
+    "@aprendo/ingest": "workspace:*",
     "convex": "^1.33.0"
   },
   "devDependencies": {

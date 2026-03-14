@@ -1,26 +1,37 @@
-// NOTE: You can remove this file. Declaring the shape
-// of the database is entirely optional in Convex.
-// See https://docs.convex.dev/database/schemas.
-
-import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
+import { defineSchema, defineTable } from 'convex/server'
+import { v } from 'convex/values'
+import {
+  pdfUploadStatusValidator,
+  questionDocumentValidator,
+} from './validators'
 
 export default defineSchema(
   {
-    documents: defineTable({
-      fieldOne: v.string(),
-      fieldTwo: v.object({
-        subFieldOne: v.array(v.number()),
-      }),
-    }),
+    pdfUploads: defineTable({
+      fileName: v.string(),
+      slug: v.string(),
+      pdfStorageId: v.id('_storage'),
+      contentType: v.string(),
+      sizeBytes: v.number(),
+      status: pdfUploadStatusValidator,
+      createdAt: v.number(),
+      updatedAt: v.number(),
+      errorMessage: v.optional(v.string()),
+      pageCount: v.optional(v.number()),
+      assetCount: v.optional(v.number()),
+      questionCount: v.optional(v.number()),
+      processingStartedAt: v.optional(v.number()),
+      processedAt: v.optional(v.number()),
+      ocrPagesStorageId: v.optional(v.id('_storage')),
+      rawQuestionsStorageId: v.optional(v.id('_storage')),
+    })
+      .index('by_createdAt', ['createdAt'])
+      .index('by_slug', ['slug'])
+      .index('by_status', ['status']),
+    questions: defineTable(questionDocumentValidator)
+      .index('by_pdfUploadId', ['pdfUploadId'])
+      .index('by_pdfUploadId_questionNumber', ['pdfUploadId', 'questionNumber'])
+      .index('by_pdfUploadId_sequence', ['pdfUploadId', 'sequence']),
   },
-  // If you ever get an error about schema mismatch
-  // between your data and your schema, and you cannot
-  // change the schema to match the current data in your database,
-  // you can:
-  //  1. Use the dashboard to delete tables or individual documents
-  //     that are causing the error.
-  //  2. Change this option to `false` and make changes to the data
-  //     freely, ignoring the schema. Don't forget to change back to `true`!
-  { schemaValidation: true }
-);
+  { schemaValidation: true },
+)
