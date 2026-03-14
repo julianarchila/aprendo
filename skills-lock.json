@@ -11,6 +11,11 @@
       "sourceType": "github",
       "computedHash": "de7a20d081cd19bf8bce4038bd62d038a0a88f218f85afb35320d09b052fb534"
     },
+    "convex-actions-scheduling": {
+      "source": "fluid-tools/claude-skills",
+      "sourceType": "github",
+      "computedHash": "0bd80af46bd2624f6e82b3a9332225051a948565e15634def8c229d9df4f4eb1"
+    },
     "convex-file-storage": {
       "source": "waynesutton/convexskills",
       "sourceType": "github",
