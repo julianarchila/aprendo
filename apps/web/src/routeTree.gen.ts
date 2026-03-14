@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as ConvexDemoRouteImport } from './routes/convex-demo'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
@@ -17,6 +18,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConvexDemoRoute = ConvexDemoRouteImport.update({
+  id: '/convex-demo',
+  path: '/convex-demo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
+  '/convex-demo': typeof ConvexDemoRoute
   '/dashboard': typeof DashboardRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
+  '/convex-demo': typeof ConvexDemoRoute
   '/dashboard': typeof DashboardRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,22 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
+  '/convex-demo': typeof ConvexDemoRoute
   '/dashboard': typeof DashboardRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/auth' | '/dashboard'
+  fullPaths: '/' | '/about' | '/auth' | '/convex-demo' | '/dashboard'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/auth' | '/dashboard'
-  id: '__root__' | '/' | '/about' | '/auth' | '/dashboard'
+  to: '/' | '/about' | '/auth' | '/convex-demo' | '/dashboard'
+  id: '__root__' | '/' | '/about' | '/auth' | '/convex-demo' | '/dashboard'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AuthRoute: typeof AuthRoute
+  ConvexDemoRoute: typeof ConvexDemoRoute
   DashboardRoute: typeof DashboardRoute
 }
 
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/convex-demo': {
+      id: '/convex-demo'
+      path: '/convex-demo'
+      fullPath: '/convex-demo'
+      preLoaderRoute: typeof ConvexDemoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -106,6 +123,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AuthRoute: AuthRoute,
+  ConvexDemoRoute: ConvexDemoRoute,
   DashboardRoute: DashboardRoute,
 }
 export const routeTree = rootRouteImport

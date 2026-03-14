@@ -41,6 +41,13 @@ export default function Header() {
           >
             Dashboard
           </Link>
+          <Link
+            to="/convex-demo"
+            className="nav-link"
+            activeProps={{ className: 'nav-link is-active' }}
+          >
+            Convex Demo
+          </Link>
         </div>
       </nav>
     </header>
