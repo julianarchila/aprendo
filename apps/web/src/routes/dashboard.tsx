@@ -403,6 +403,126 @@ function formatPercent(value: number) {
   return `${Math.round(value * 100)}%`
 }
 
+function normalizeEvidenceLevel(level: string): 'low' | 'medium' | 'high' {
+  if (level === 'high' || level === 'medium') return level
+  return 'low'
+}
+
+function getEvidenceLabel(level: string) {
+  const normalizedLevel = normalizeEvidenceLevel(level)
+
+  switch (normalizedLevel) {
+    case 'high':
+      return 'Alta confianza'
+    case 'medium':
+      return 'Confianza media'
+    default:
+      return 'Lectura inicial'
+  }
+}
+
+function getReadinessBand(masteryScore: number, evidenceLevel: string) {
+  const normalizedEvidenceLevel = normalizeEvidenceLevel(evidenceLevel)
+
+  if (normalizedEvidenceLevel === 'low') {
+    return {
+      label: 'Lectura inicial',
+      tone: 'bg-[var(--bg-inset)] text-[var(--text-secondary)] border-[var(--border)]',
+      message: 'Todavia estamos formando una senal clara. Practicar mas afinara esta lectura.',
+    }
+  }
+
+  if (masteryScore >= 0.72) {
+    return {
+      label: 'Bien encaminada',
+      tone: 'bg-[var(--success-soft)] text-[var(--success-text)] border-transparent',
+      message: 'Ya muestras una base solida. Conviene mantener ritmo y subir dificultad.',
+    }
+  }
+
+  if (masteryScore >= 0.5) {
+    return {
+      label: 'En desarrollo',
+      tone: 'bg-[var(--accent-soft)] text-[var(--accent-text)] border-transparent',
+      message: 'Hay bases utiles, pero todavia faltan huecos por cerrar con practica dirigida.',
+    }
+  }
+
+  return {
+    label: 'Prioridad de refuerzo',
+    tone: 'bg-[var(--accent)]/12 text-[var(--accent-text)] border-transparent',
+    message: 'Conviene volver a esta area pronto para evitar que se convierta en un bloqueo.',
+  }
+}
+
+function getOverallReadinessSummary(
+  subjectAggregates: Array<{
+    masteryScore: number
+    evidenceLevel: string
+  }>,
+) {
+  if (subjectAggregates.length === 0) {
+    return {
+      title: 'Aun no hay una lectura clara',
+      description: 'Completa tu diagnostico para ver como estas por materia.',
+    }
+  }
+
+  const averageMastery = subjectAggregates.reduce((sum, agg) => sum + agg.masteryScore, 0) / subjectAggregates.length
+  const lowEvidenceCount = subjectAggregates.filter(
+    (agg) => normalizeEvidenceLevel(agg.evidenceLevel) === 'low',
+  ).length
+
+  if (lowEvidenceCount >= Math.ceil(subjectAggregates.length / 2)) {
+    return {
+      title: 'Este es tu punto de partida',
+      description: 'La lectura todavia es inicial en varias materias. Lo importante ahora es convertirla en una senal mas estable con practica.',
+    }
+  }
+
+  if (averageMastery >= 0.68) {
+    return {
+      title: 'Tienes una base competitiva',
+      description: 'Tu diagnostico muestra varias materias encaminadas. Ahora conviene consolidar las zonas menos estables.',
+    }
+  }
+
+  if (averageMastery >= 0.5) {
+    return {
+      title: 'Tu preparacion va por buen camino',
+      description: 'Ya hay fortalezas visibles, pero todavia necesitas trabajo focalizado en algunas materias clave.',
+    }
+  }
+
+  return {
+    title: 'Hay oportunidades claras de mejora',
+    description: 'Tu mejor siguiente paso es reforzar las materias con senales mas fragiles antes de ampliar cobertura.',
+  }
+}
+
+function getFocusMessage(
+  aggregate: {
+    masteryScore: number
+    evidenceLevel: string
+    recentAccuracy: number
+    accuracy: number
+  },
+) {
+  if (normalizeEvidenceLevel(aggregate.evidenceLevel) === 'low') {
+    return 'Todavia hay poca evidencia. Vale la pena practicarlo otra vez antes de sacar conclusiones.'
+  }
+
+  if (aggregate.recentAccuracy > aggregate.accuracy + 0.12) {
+    return 'Ya se nota mejora reciente. Conviene seguir aqui para convertir ese avance en consistencia.'
+  }
+
+  if (aggregate.masteryScore < 0.45) {
+    return 'Este tema esta frenando tu avance. Deberia entrar pronto en tu siguiente bloque de estudio.'
+  }
+
+  return 'Necesita mas repeticiones guiadas para pasar de entendimiento parcial a seguridad real.'
+}
+
 function ProgressTab({ session }: { session: { studentId: string; email: string } }) {
   const progressQuery = useQuery({
     ...studentProgressQuery(session.studentId),
@@ -424,8 +544,15 @@ function ProgressTab({ session }: { session: { studentId: string; email: string 
   const progress = progressQuery.data
   const diagnostic = latestDiagnostic.data
   const overallSummary = progress?.snapshot?.overallSummary
-  const subjectAggregates = progress?.subjectAggregates ?? []
+  const subjectAggregates = [...(progress?.subjectAggregates ?? [])].sort(
+    (a, b) => b.masteryScore - a.masteryScore,
+  )
   const weakestSubtopics = progress?.weakestSubtopics ?? []
+  const readinessSummary = getOverallReadinessSummary(subjectAggregates)
+  const topStrengths = subjectAggregates.slice(0, 2)
+  const topFocusSubjects = [...subjectAggregates]
+    .reverse()
+    .slice(0, 2)
 
   if (overallSummary == null || diagnostic?.status !== 'completed') {
     return (
@@ -456,90 +583,192 @@ function ProgressTab({ session }: { session: { studentId: string; email: string 
   }
 
   return (
-    <div className="fade-in mx-auto max-w-4xl">
-      {/* Overall score */}
-      <div className="mb-8 flex flex-col items-center gap-6 sm:flex-row sm:items-start">
-        <div className="card flex flex-col items-center px-8 py-8">
-          <div className="flex h-28 w-28 items-center justify-center rounded-full border-[6px] border-[var(--accent-medium)] bg-[var(--bg-card)]">
-            <span className="text-4xl font-bold text-[var(--text-primary)]">
-              {Math.round(overallSummary.accuracy * 100)}
-            </span>
+    <div className="fade-in mx-auto max-w-5xl space-y-6">
+      <div className="card relative overflow-hidden p-6 sm:p-8">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,var(--accent-soft),transparent_70%)]" />
+        <div className="relative grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
+          <div>
+            <p className="kicker mb-3">Mapa de preparacion</p>
+            <h2 className="max-w-2xl text-2xl font-semibold tracking-[-0.02em] text-[var(--text-primary)] sm:text-3xl">
+              {readinessSummary.title}
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)] sm:text-[15px]">
+              {readinessSummary.description} Esta lectura viene de tu ultimo diagnostico y se ira afinando a medida que practiques.
+            </p>
           </div>
-          <p className="mt-3 text-sm text-[var(--text-secondary)]">
-            {overallSummary.correctCount} de {overallSummary.questionCount} correctas
-          </p>
-        </div>
 
-        <div className="flex-1">
-          <h2 className="mb-1 text-xl font-semibold text-[var(--text-primary)]">
-            Resultado del diagnostico
-          </h2>
-          <p className="mb-4 text-sm text-[var(--text-secondary)]">
-            Linea base despues del diagnostico para {session.email}. Todavia no hay practica adaptativa.
-          </p>
-
-          {/* Subject bars */}
-          <div className="space-y-3">
-            {subjectAggregates.map((agg) => (
-              <div key={agg._id}>
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="text-sm font-medium text-[var(--text-primary)]">
-                    {getSubjectLabel(agg.subjectId)}
-                  </span>
-                  <span className="text-sm font-semibold text-[var(--accent-text)]">
-                    {formatPercent(agg.accuracy)}
-                  </span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-inset)]">
-                  <div
-                    className="h-full rounded-full bg-[var(--accent)] transition-all duration-500 ease-out"
-                    style={{ width: formatPercent(agg.accuracy) }}
-                  />
-                </div>
-                <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
-                  {agg.correctCount} de {agg.attemptCount} &middot; evidencia {agg.evidenceLevel}
-                </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-inset)] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+                Materias mejor posicionadas
+              </p>
+              <div className="mt-3 space-y-2">
+                {topStrengths.length === 0 ? (
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    Completa mas actividad para detectar fortalezas.
+                  </p>
+                ) : (
+                  topStrengths.map((agg) => (
+                    <div key={agg._id} className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-[var(--text-primary)]">
+                        {getSubjectLabel(agg.subjectId)}
+                      </span>
+                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getReadinessBand(agg.masteryScore, agg.evidenceLevel).tone}`}>
+                        {getReadinessBand(agg.masteryScore, agg.evidenceLevel).label}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
-            ))}
+            </div>
+
+            <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+                Materias para reforzar
+              </p>
+              <div className="mt-3 space-y-2">
+                {topFocusSubjects.length === 0 ? (
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    Todavia no hay suficientes senales para priorizar.
+                  </p>
+                ) : (
+                  topFocusSubjects.map((agg) => (
+                    <div key={agg._id} className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-[var(--text-primary)]">
+                        {getSubjectLabel(agg.subjectId)}
+                      </span>
+                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getReadinessBand(agg.masteryScore, agg.evidenceLevel).tone}`}>
+                        {getReadinessBand(agg.masteryScore, agg.evidenceLevel).label}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Weakest subtopics */}
-      <div className="card p-6">
-        <h3 className="mb-1 text-lg font-semibold text-[var(--text-primary)]">
-          Subtemas que merecen atencion
-        </h3>
-        <p className="mb-4 text-sm text-[var(--text-secondary)]">
-          Alertas tempranas basadas en tu diagnostico inicial.
-        </p>
-
-        {weakestSubtopics.length === 0 ? (
-          <p className="text-sm text-[var(--text-tertiary)]">
-            Aun no hay suficiente evidencia para senalar subtemas concretos.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {weakestSubtopics.map((agg) => (
-              <div
-                key={agg._id}
-                className="flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-inset)] px-4 py-3"
-              >
-                <div>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">
-                    {getSubtopicLabel(agg.subtopicId ?? 'sin_subtema')}
-                  </p>
-                  <p className="text-xs text-[var(--text-tertiary)]">
-                    {getSubjectLabel(agg.subjectId)}
-                  </p>
-                </div>
-                <span className="text-sm font-semibold text-[var(--accent-text)]">
-                  {formatPercent(agg.accuracy)}
-                </span>
-              </div>
-            ))}
+      <div className="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
+        <div className="card p-6">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-[var(--text-primary)]">
+                Preparacion por materia
+              </h3>
+              <p className="text-sm text-[var(--text-secondary)]">
+                Una lectura mas util que una nota: donde ya tienes base y donde conviene concentrarte.
+              </p>
+            </div>
+            <div className="hidden rounded-full border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)] sm:block">
+              {session.email}
+            </div>
           </div>
-        )}
+
+          <div className="space-y-4">
+            {subjectAggregates.map((agg) => {
+              const readiness = getReadinessBand(agg.masteryScore, agg.evidenceLevel)
+              return (
+                <div
+                  key={agg._id}
+                  className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-4"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-base font-semibold text-[var(--text-primary)]">
+                          {getSubjectLabel(agg.subjectId)}
+                        </h4>
+                        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${readiness.tone}`}>
+                          {readiness.label}
+                        </span>
+                        <span className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)]">
+                          {getEvidenceLabel(agg.evidenceLevel)}
+                        </span>
+                      </div>
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
+                        {readiness.message}
+                      </p>
+                    </div>
+
+                    <div className="min-w-44">
+                      <div className="mb-2 flex items-center justify-between text-xs font-medium uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                        <span>Senal actual</span>
+                        <span>{formatPercent(agg.masteryScore)}</span>
+                      </div>
+                      <div className="h-2.5 overflow-hidden rounded-full bg-[var(--bg-inset)]">
+                        <div
+                          className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-text))] transition-all duration-500 ease-out"
+                          style={{ width: formatPercent(agg.masteryScore) }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="card p-6">
+            <h3 className="text-lg font-semibold text-[var(--text-primary)]">
+              Lo que deberias trabajar ahora
+            </h3>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              No es una lista de errores. Es el mejor punto de enfoque para que tu siguiente practica tenga impacto.
+            </p>
+
+            {weakestSubtopics.length === 0 ? (
+              <p className="mt-4 text-sm leading-6 text-[var(--text-tertiary)]">
+                Aun no hay suficiente evidencia para recomendar subtemas concretos. Con mas practica, esta seccion se volvera mucho mas precisa.
+              </p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {weakestSubtopics.slice(0, 4).map((agg, index) => (
+                  <div
+                    key={agg._id}
+                    className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-inset)] p-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-card)] text-xs font-semibold text-[var(--text-primary)]">
+                        {index + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">
+                          {getSubtopicLabel(agg.subtopicId ?? 'sin_subtema')}
+                        </p>
+                        <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                          {getSubjectLabel(agg.subjectId)}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+                          {getFocusMessage(agg)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card p-6">
+            <h3 className="text-lg font-semibold text-[var(--text-primary)]">
+              Como leer esta vista
+            </h3>
+            <div className="mt-4 space-y-3 text-sm leading-6 text-[var(--text-secondary)]">
+              <p>
+                El diagnostico no define tu resultado final. Solo marca tu punto de partida por materia.
+              </p>
+              <p>
+                Las materias con lectura inicial necesitan mas evidencia antes de sacar conclusiones fuertes.
+              </p>
+              <p>
+                La meta no es perseguir una nota aqui, sino saber que reforzar para llegar mejor preparado al ICFES.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
