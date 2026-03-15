@@ -6,6 +6,7 @@
       "persistent": true
     },
     "build": {
+      "env": ["VITE_CONVEX_URL"],
       "dependsOn": ["^build"],
       "outputs": []
     },
