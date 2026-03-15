@@ -311,21 +311,33 @@ function DiagnosticTab({ session }: { session: { studentId: string; email: strin
             {currentQuestion.question.options.map((option) => {
               const isSelected = currentQuestion.attempt?.selectedOption === option.label
               return (
-                <button
+                <div
                   key={option.label}
-                  type="button"
-                  disabled={answerMutation.isPending || completeMutation.isPending}
-                  onClick={() => answerMutation.mutate(option.label)}
+                  role="button"
+                  tabIndex={answerMutation.isPending || completeMutation.isPending ? -1 : 0}
+                  aria-disabled={answerMutation.isPending || completeMutation.isPending}
+                  onClick={() => {
+                    if (answerMutation.isPending || completeMutation.isPending) return
+                    answerMutation.mutate(option.label)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      if (answerMutation.isPending || completeMutation.isPending) return
+                      answerMutation.mutate(option.label)
+                    }
+                  }}
                   className={[
                     hasImageOptions ? 'option-card option-card-image' : 'option-card',
                     isSelected ? 'is-selected' : '',
+                    (answerMutation.isPending || completeMutation.isPending) ? 'pointer-events-none opacity-60' : '',
                   ].join(' ')}
                 >
                   <span className="option-label">{option.label}</span>
                   <span className="flex-1 min-w-0">
                     <MarkdownBlock markdown={option.bodyMarkdown} />
                   </span>
-                </button>
+                </div>
               )
             })}
           </div>
