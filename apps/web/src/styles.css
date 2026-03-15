@@ -446,6 +446,22 @@ pre code {
 .stagger-3 { animation-delay: 150ms; }
 .stagger-4 { animation-delay: 200ms; }
 
+/* ─── Progress ring animation ─── */
+.progress-ring {
+  transition: stroke-dashoffset 600ms ease;
+}
+
+/* ─── Progress hero subtle pattern ─── */
+.progress-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0);
+  background-size: 24px 24px;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 /* ─── Markdown rendering ─── */
 .markdown-body {
   color: var(--text-primary);

@@ -408,50 +408,34 @@ function normalizeEvidenceLevel(level: string): 'low' | 'medium' | 'high' {
   return 'low'
 }
 
-function getEvidenceLabel(level: string) {
-  const normalizedLevel = normalizeEvidenceLevel(level)
-
-  switch (normalizedLevel) {
-    case 'high':
-      return 'Alta confianza'
-    case 'medium':
-      return 'Confianza media'
-    default:
-      return 'Lectura inicial'
-  }
-}
-
 function getReadinessBand(masteryScore: number, evidenceLevel: string) {
   const normalizedEvidenceLevel = normalizeEvidenceLevel(evidenceLevel)
 
   if (normalizedEvidenceLevel === 'low') {
     return {
       label: 'Lectura inicial',
+      color: 'var(--text-tertiary)',
       tone: 'bg-[var(--bg-inset)] text-[var(--text-secondary)] border-[var(--border)]',
-      message: 'Todavia estamos formando una senal clara. Practicar mas afinara esta lectura.',
     }
   }
-
   if (masteryScore >= 0.72) {
     return {
       label: 'Bien encaminada',
+      color: 'var(--success)',
       tone: 'bg-[var(--success-soft)] text-[var(--success-text)] border-transparent',
-      message: 'Ya muestras una base solida. Conviene mantener ritmo y subir dificultad.',
     }
   }
-
   if (masteryScore >= 0.5) {
     return {
       label: 'En desarrollo',
+      color: 'var(--accent)',
       tone: 'bg-[var(--accent-soft)] text-[var(--accent-text)] border-transparent',
-      message: 'Hay bases utiles, pero todavia faltan huecos por cerrar con practica dirigida.',
     }
   }
-
   return {
     label: 'Prioridad de refuerzo',
-    tone: 'bg-[var(--accent)]/12 text-[var(--accent-text)] border-transparent',
-    message: 'Conviene volver a esta area pronto para evitar que se convierta en un bloqueo.',
+    color: 'var(--accent-text)',
+    tone: 'bg-[var(--accent-soft)] text-[var(--accent-text)] border-transparent',
   }
 }
 
@@ -462,10 +446,7 @@ function getOverallReadinessSummary(
   }>,
 ) {
   if (subjectAggregates.length === 0) {
-    return {
-      title: 'Aun no hay una lectura clara',
-      description: 'Completa tu diagnostico para ver como estas por materia.',
-    }
+    return { title: 'Aun no hay una lectura clara' }
   }
 
   const averageMastery = subjectAggregates.reduce((sum, agg) => sum + agg.masteryScore, 0) / subjectAggregates.length
@@ -474,53 +455,58 @@ function getOverallReadinessSummary(
   ).length
 
   if (lowEvidenceCount >= Math.ceil(subjectAggregates.length / 2)) {
-    return {
-      title: 'Este es tu punto de partida',
-      description: 'La lectura todavia es inicial en varias materias. Lo importante ahora es convertirla en una senal mas estable con practica.',
-    }
+    return { title: 'Este es tu punto de partida' }
   }
-
   if (averageMastery >= 0.68) {
-    return {
-      title: 'Tienes una base competitiva',
-      description: 'Tu diagnostico muestra varias materias encaminadas. Ahora conviene consolidar las zonas menos estables.',
-    }
+    return { title: 'Tienes una base competitiva' }
   }
-
   if (averageMastery >= 0.5) {
-    return {
-      title: 'Tu preparacion va por buen camino',
-      description: 'Ya hay fortalezas visibles, pero todavia necesitas trabajo focalizado en algunas materias clave.',
-    }
+    return { title: 'Tu preparacion va por buen camino' }
   }
-
-  return {
-    title: 'Hay oportunidades claras de mejora',
-    description: 'Tu mejor siguiente paso es reforzar las materias con senales mas fragiles antes de ampliar cobertura.',
-  }
+  return { title: 'Hay oportunidades claras de mejora' }
 }
 
-function getFocusMessage(
-  aggregate: {
-    masteryScore: number
-    evidenceLevel: string
-    recentAccuracy: number
-    accuracy: number
-  },
-) {
-  if (normalizeEvidenceLevel(aggregate.evidenceLevel) === 'low') {
-    return 'Todavia hay poca evidencia. Vale la pena practicarlo otra vez antes de sacar conclusiones.'
-  }
+/* ── Ring Progress ── */
 
-  if (aggregate.recentAccuracy > aggregate.accuracy + 0.12) {
-    return 'Ya se nota mejora reciente. Conviene seguir aqui para convertir ese avance en consistencia.'
-  }
+function RingProgress({
+  value,
+  size = 48,
+  strokeWidth = 4,
+  color,
+}: {
+  value: number
+  size?: number
+  strokeWidth?: number
+  color: string
+}) {
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const offset = circumference - (value * circumference)
 
-  if (aggregate.masteryScore < 0.45) {
-    return 'Este tema esta frenando tu avance. Deberia entrar pronto en tu siguiente bloque de estudio.'
-  }
-
-  return 'Necesita mas repeticiones guiadas para pasar de entendimiento parcial a seguridad real.'
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="block -rotate-90">
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke="var(--border)"
+        strokeWidth={strokeWidth}
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        className="progress-ring"
+      />
+    </svg>
+  )
 }
 
 function ProgressTab({ session }: { session: { studentId: string; email: string } }) {
@@ -549,225 +535,125 @@ function ProgressTab({ session }: { session: { studentId: string; email: string 
   )
   const weakestSubtopics = progress?.weakestSubtopics ?? []
   const readinessSummary = getOverallReadinessSummary(subjectAggregates)
-  const topStrengths = subjectAggregates.slice(0, 2)
-  const topFocusSubjects = [...subjectAggregates]
-    .reverse()
-    .slice(0, 2)
 
   if (overallSummary == null || diagnostic?.status !== 'completed') {
     return (
-      <div className="fade-in mx-auto max-w-xl">
-        <div className="card p-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--bg-inset)]">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 3v18h18" />
-              <path d="m19 9-5 5-4-4-3 3" />
-            </svg>
+      <div className="fade-in mx-auto max-w-md">
+        <div className="card relative overflow-hidden p-8 text-center">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--accent-soft),transparent_65%)]" />
+          <div className="relative">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-inset)]">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3v18h18" />
+                <path d="m19 9-5 5-4-4-3 3" />
+              </svg>
+            </div>
+            <h2 className="mb-2 font-display text-2xl italic text-[var(--text-primary)]">
+              Aun no tienes resultados
+            </h2>
+            <p className="mx-auto mb-6 max-w-xs text-sm text-[var(--text-secondary)]">
+              Completa el diagnostico para ver tu progreso.
+            </p>
+            <Link to="/dashboard" search={{}} className="btn-primary no-underline">
+              Ir al diagnostico
+            </Link>
           </div>
-          <h2 className="mb-2 text-xl font-semibold text-[var(--text-primary)]">
-            Aun no tienes resultados
-          </h2>
-          <p className="mb-6 text-sm text-[var(--text-secondary)]">
-            Tu pagina de progreso aparecera cuando completes el primer diagnostico.
-          </p>
-          <Link
-            to="/dashboard"
-            search={{}}
-            className="btn-primary no-underline"
-          >
-            Ir al diagnostico
-          </Link>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="fade-in mx-auto max-w-5xl space-y-6">
-      <div className="card relative overflow-hidden p-6 sm:p-8">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,var(--accent-soft),transparent_70%)]" />
-        <div className="relative grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
+    <div className="fade-in mx-auto max-w-5xl space-y-5">
+      {/* ── Header ── */}
+      <div className="card progress-hero relative overflow-hidden px-6 py-5 sm:px-8 sm:py-6">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,var(--accent-soft),transparent_55%)]" />
+        <div className="relative flex items-center justify-between gap-4">
           <div>
-            <p className="kicker mb-3">Mapa de preparacion</p>
-            <h2 className="max-w-2xl text-2xl font-semibold tracking-[-0.02em] text-[var(--text-primary)] sm:text-3xl">
+            <p className="kicker mb-1">Mapa de preparacion</p>
+            <h2 className="font-display text-2xl italic tracking-tight text-[var(--text-primary)] sm:text-3xl">
               {readinessSummary.title}
             </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)] sm:text-[15px]">
-              {readinessSummary.description} Esta lectura viene de tu ultimo diagnostico y se ira afinando a medida que practiques.
-            </p>
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-inset)] p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-                Materias mejor posicionadas
-              </p>
-              <div className="mt-3 space-y-2">
-                {topStrengths.length === 0 ? (
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    Completa mas actividad para detectar fortalezas.
-                  </p>
-                ) : (
-                  topStrengths.map((agg) => (
-                    <div key={agg._id} className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium text-[var(--text-primary)]">
-                        {getSubjectLabel(agg.subjectId)}
-                      </span>
-                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getReadinessBand(agg.masteryScore, agg.evidenceLevel).tone}`}>
-                        {getReadinessBand(agg.masteryScore, agg.evidenceLevel).label}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-                Materias para reforzar
-              </p>
-              <div className="mt-3 space-y-2">
-                {topFocusSubjects.length === 0 ? (
-                  <p className="text-sm text-[var(--text-secondary)]">
-                    Todavia no hay suficientes senales para priorizar.
-                  </p>
-                ) : (
-                  topFocusSubjects.map((agg) => (
-                    <div key={agg._id} className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium text-[var(--text-primary)]">
-                        {getSubjectLabel(agg.subjectId)}
-                      </span>
-                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getReadinessBand(agg.masteryScore, agg.evidenceLevel).tone}`}>
-                        {getReadinessBand(agg.masteryScore, agg.evidenceLevel).label}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+          <div className="hidden text-right sm:block">
+            <p className="text-2xl font-semibold tabular-nums tracking-tight text-[var(--text-primary)]">
+              {formatPercent(overallSummary.accuracy)}
+            </p>
+            <p className="text-xs font-medium text-[var(--text-tertiary)]">precision general</p>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
-        <div className="card p-6">
-          <div className="mb-5 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-semibold text-[var(--text-primary)]">
-                Preparacion por materia
-              </h3>
-              <p className="text-sm text-[var(--text-secondary)]">
-                Una lectura mas util que una nota: donde ya tienes base y donde conviene concentrarte.
-              </p>
-            </div>
-            <div className="hidden rounded-full border border-[var(--border)] bg-[var(--bg-inset)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)] sm:block">
-              {session.email}
-            </div>
+      {/* ── Two-column layout ── */}
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+        {/* Left: subject cards */}
+        <div className="card overflow-hidden">
+          <div className="border-b border-[var(--border)] px-5 py-3">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Por materia</h3>
           </div>
-
-          <div className="space-y-4">
+          <div className="divide-y divide-[var(--border)]">
             {subjectAggregates.map((agg) => {
               const readiness = getReadinessBand(agg.masteryScore, agg.evidenceLevel)
               return (
-                <div
-                  key={agg._id}
-                  className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-card)] p-4"
-                >
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-base font-semibold text-[var(--text-primary)]">
-                          {getSubjectLabel(agg.subjectId)}
-                        </h4>
-                        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${readiness.tone}`}>
-                          {readiness.label}
-                        </span>
-                        <span className="rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)]">
-                          {getEvidenceLabel(agg.evidenceLevel)}
-                        </span>
-                      </div>
-                      <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
-                        {readiness.message}
-                      </p>
-                    </div>
-
-                    <div className="min-w-44">
-                      <div className="mb-2 flex items-center justify-between text-xs font-medium uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-                        <span>Senal actual</span>
-                        <span>{formatPercent(agg.masteryScore)}</span>
-                      </div>
-                      <div className="h-2.5 overflow-hidden rounded-full bg-[var(--bg-inset)]">
-                        <div
-                          className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-text))] transition-all duration-500 ease-out"
-                          style={{ width: formatPercent(agg.masteryScore) }}
-                        />
-                      </div>
-                    </div>
+                <div key={agg._id} className="flex items-center gap-3.5 px-5 py-3.5">
+                  <div className="relative shrink-0">
+                    <RingProgress
+                      value={agg.masteryScore}
+                      size={44}
+                      strokeWidth={4}
+                      color={readiness.color}
+                    />
+                    <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold tabular-nums text-[var(--text-primary)]">
+                      {formatPercent(agg.masteryScore)}
+                    </span>
                   </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">
+                      {getSubjectLabel(agg.subjectId)}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[0.6875rem] font-semibold ${readiness.tone}`}>
+                    {readiness.label}
+                  </span>
                 </div>
               )
             })}
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="card p-6">
-            <h3 className="text-lg font-semibold text-[var(--text-primary)]">
-              Lo que deberias trabajar ahora
-            </h3>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">
-              No es una lista de errores. Es el mejor punto de enfoque para que tu siguiente practica tenga impacto.
-            </p>
-
-            {weakestSubtopics.length === 0 ? (
-              <p className="mt-4 text-sm leading-6 text-[var(--text-tertiary)]">
-                Aun no hay suficiente evidencia para recomendar subtemas concretos. Con mas practica, esta seccion se volvera mucho mas precisa.
-              </p>
-            ) : (
-              <div className="mt-4 space-y-3">
-                {weakestSubtopics.slice(0, 4).map((agg, index) => (
-                  <div
-                    key={agg._id}
-                    className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-inset)] p-4"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-card)] text-xs font-semibold text-[var(--text-primary)]">
-                        {index + 1}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">
-                          {getSubtopicLabel(agg.subtopicId ?? 'sin_subtema')}
-                        </p>
-                        <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-                          {getSubjectLabel(agg.subjectId)}
-                        </p>
-                        <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                          {getFocusMessage(agg)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+        {/* Right: focus subtopics */}
+        <div className="card overflow-hidden">
+          <div className="border-b border-[var(--border)] px-5 py-3">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Para trabajar ahora</h3>
           </div>
-
-          <div className="card p-6">
-            <h3 className="text-lg font-semibold text-[var(--text-primary)]">
-              Como leer esta vista
-            </h3>
-            <div className="mt-4 space-y-3 text-sm leading-6 text-[var(--text-secondary)]">
-              <p>
-                El diagnostico no define tu resultado final. Solo marca tu punto de partida por materia.
-              </p>
-              <p>
-                Las materias con lectura inicial necesitan mas evidencia antes de sacar conclusiones fuertes.
-              </p>
-              <p>
-                La meta no es perseguir una nota aqui, sino saber que reforzar para llegar mejor preparado al ICFES.
+          {weakestSubtopics.length === 0 ? (
+            <div className="px-5 py-8 text-center">
+              <p className="text-sm text-[var(--text-tertiary)]">
+                Practica mas para obtener recomendaciones.
               </p>
             </div>
-          </div>
+          ) : (
+            <div className="divide-y divide-[var(--border)]">
+              {weakestSubtopics.slice(0, 5).map((agg, index) => (
+                <div key={agg._id} className="flex items-center gap-3.5 px-5 py-3.5">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[0.6875rem] font-bold text-[var(--accent-text)]">
+                    {index + 1}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">
+                      {getSubtopicLabel(agg.subtopicId ?? 'sin_subtema')}
+                    </p>
+                    <p className="text-[0.6875rem] text-[var(--text-tertiary)]">
+                      {getSubjectLabel(agg.subjectId)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-xs font-semibold tabular-nums text-[var(--text-tertiary)]">
+                    {formatPercent(agg.masteryScore)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
