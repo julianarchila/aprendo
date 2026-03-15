@@ -525,6 +525,12 @@ pre code {
   margin-top: 1rem;
 }
 
+/* Hide Streamdown's built-in image download button and hover overlay */
+.markdown-body [data-streamdown="image-wrapper"] > button,
+.markdown-body [data-streamdown="image-wrapper"] > div:last-of-type {
+  display: none !important;
+}
+
 .markdown-body p:last-child,
 .markdown-body ul:last-child,
 .markdown-body ol:last-child {
