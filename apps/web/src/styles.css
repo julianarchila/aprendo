@@ -367,6 +367,43 @@ pre code {
   border-color: var(--success);
 }
 
+/* ─── Image option variant ─── */
+.option-card-image {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.option-card-image .option-label {
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 0.75rem;
+}
+
+.option-card-image .markdown-body img {
+  max-width: 100%;
+  max-height: 120px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  margin-top: 0;
+}
+
+/* Constrain images inside options (non-image-grid variant too) */
+.option-card .markdown-body img {
+  max-height: 140px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  margin-top: 0.25rem;
+}
+
+/* Image options container keeps items equal height */
+.options-has-images > .option-card-image {
+  min-height: 0;
+}
+
 /* ─── Kicker (small label) ─── */
 .kicker {
   letter-spacing: 0.08em;

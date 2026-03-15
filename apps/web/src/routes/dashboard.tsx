@@ -264,10 +264,15 @@ function DiagnosticTab({ session }: { session: { studentId: string; email: strin
     )
   }
 
+  // Detect if any option contains an image (markdown image syntax)
+  const hasImageOptions = currentQuestion.question.options.some(
+    (opt) => /!\[.*?\]\(.*?\)/.test(opt.bodyMarkdown) || /<img\s/i.test(opt.bodyMarkdown),
+  )
+
   return (
-    <div className="fade-in mx-auto max-w-3xl">
+    <div className="fade-in mx-auto max-w-6xl">
       {/* Progress bar */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <p className="text-sm text-[var(--text-secondary)]">
           Pregunta <span className="font-semibold text-[var(--text-primary)]">{currentIndex + 1}</span> de {questions.length}
         </p>
@@ -277,85 +282,173 @@ function DiagnosticTab({ session }: { session: { studentId: string; email: strin
       </div>
 
       {/* Track bar */}
-      <div className="mb-8 h-1.5 overflow-hidden rounded-full bg-[var(--bg-inset)]">
+      <div className="mb-6 h-1.5 overflow-hidden rounded-full bg-[var(--bg-inset)]">
         <div
           className="h-full rounded-full bg-[var(--accent)] transition-all duration-300 ease-out"
           style={{ width: `${(answeredCount / questions.length) * 100}%` }}
         />
       </div>
 
-      {/* Question card */}
-      <div className="card mb-5 p-6 sm:p-8">
-        <div className="mb-4">
-          <span className="chip chip-accent">
-            {getSubjectLabel(currentQuestion.question.subjectId ?? 'sin_asignar')}
-          </span>
-        </div>
-        <MarkdownBlock markdown={currentQuestion.question.bodyMarkdown} />
-      </div>
-
-      {/* Options */}
-      <div className="mb-5 space-y-3">
-        {currentQuestion.question.options.map((option) => {
-          const isSelected = currentQuestion.attempt?.selectedOption === option.label
-          return (
-            <button
-              key={option.label}
-              type="button"
-              disabled={answerMutation.isPending || completeMutation.isPending}
-              onClick={() => answerMutation.mutate(option.label)}
-              className={`option-card ${isSelected ? 'is-selected' : ''}`}
-            >
-              <span className="option-label">{option.label}</span>
-              <span className="flex-1">
-                <MarkdownBlock markdown={option.bodyMarkdown} />
+      {/* Two-column layout: question area + sticky sidebar */}
+      <div className="grid gap-5 lg:grid-cols-[1fr_260px]">
+        {/* Left: question + options + nav */}
+        <div className="min-w-0">
+          {/* Question card */}
+          <div className="card mb-5 p-5 sm:p-6">
+            <div className="mb-3">
+              <span className="chip chip-accent">
+                {getSubjectLabel(currentQuestion.question.subjectId ?? 'sin_asignar')}
               </span>
-            </button>
-          )
-        })}
-      </div>
+            </div>
+            <MarkdownBlock markdown={currentQuestion.question.bodyMarkdown} />
+          </div>
 
-      {/* Navigation */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={currentIndex === 0}
-            onClick={() => setCurrentIndex((v) => Math.max(0, v - 1))}
-            className="btn-secondary"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5" />
-              <path d="m12 19-7-7 7-7" />
-            </svg>
-            Anterior
-          </button>
-          <button
-            type="button"
-            disabled={currentIndex >= questions.length - 1}
-            onClick={() => setCurrentIndex((v) => Math.min(questions.length - 1, v + 1))}
-            className="btn-secondary"
-          >
-            Siguiente
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14" />
-              <path d="m12 5 7 7-7 7" />
-            </svg>
-          </button>
+          {/* Options -- grid for image options, stack for text */}
+          <div className={hasImageOptions
+            ? 'mb-5 grid grid-cols-2 gap-2.5 options-has-images'
+            : 'mb-5 space-y-3'
+          }>
+            {currentQuestion.question.options.map((option) => {
+              const isSelected = currentQuestion.attempt?.selectedOption === option.label
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  disabled={answerMutation.isPending || completeMutation.isPending}
+                  onClick={() => answerMutation.mutate(option.label)}
+                  className={[
+                    hasImageOptions ? 'option-card option-card-image' : 'option-card',
+                    isSelected ? 'is-selected' : '',
+                  ].join(' ')}
+                >
+                  <span className="option-label">{option.label}</span>
+                  <span className="flex-1 min-w-0">
+                    <MarkdownBlock markdown={option.bodyMarkdown} />
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Navigation */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={currentIndex === 0}
+                onClick={() => setCurrentIndex((v) => Math.max(0, v - 1))}
+                className="btn-secondary"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5" />
+                  <path d="m12 19-7-7 7-7" />
+                </svg>
+                Anterior
+              </button>
+              <button
+                type="button"
+                disabled={currentIndex >= questions.length - 1}
+                onClick={() => setCurrentIndex((v) => Math.min(questions.length - 1, v + 1))}
+                className="btn-secondary"
+              >
+                Siguiente
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              disabled={completeMutation.isPending}
+              onClick={() => completeMutation.mutate()}
+              className="btn-primary"
+            >
+              {completeMutation.isPending ? 'Cerrando...' : 'Terminar diagnostico'}
+            </button>
+          </div>
+
+          {/* Errors */}
+          {answerMutation.error ? (
+            <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--border-accent)] bg-[var(--accent-soft)] p-4 text-sm font-medium text-[var(--accent-text)]">
+              {answerMutation.error instanceof Error ? answerMutation.error.message : 'No se pudo guardar la respuesta.'}
+            </div>
+          ) : null}
+          {completeMutation.error ? (
+            <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--border-accent)] bg-[var(--accent-soft)] p-4 text-sm font-medium text-[var(--accent-text)]">
+              {completeMutation.error instanceof Error ? completeMutation.error.message : 'No se pudo completar el diagnostico.'}
+            </div>
+          ) : null}
         </div>
 
-        <button
-          type="button"
-          disabled={completeMutation.isPending}
-          onClick={() => completeMutation.mutate()}
-          className="btn-primary"
-        >
-          {completeMutation.isPending ? 'Cerrando...' : 'Terminar diagnostico'}
-        </button>
+        {/* Right: sticky exam map sidebar */}
+        <aside className="hidden lg:block">
+          <div className="sticky top-6">
+            <div className="card p-4">
+              <p className="kicker mb-3">Mapa del examen</p>
+              <div className="grid grid-cols-5 gap-1.5">
+                {questions.map((q, idx) => {
+                  const isAnswered = q.attempt != null
+                  const isCurrent = idx === currentIndex
+                  return (
+                    <button
+                      key={q.sessionQuestionId}
+                      type="button"
+                      onClick={() => setCurrentIndex(idx)}
+                      className={[
+                        'flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-[0.6875rem] font-semibold transition',
+                        isCurrent
+                          ? 'bg-[var(--accent)] text-[var(--text-inverted)]'
+                          : isAnswered
+                            ? 'bg-[var(--success-soft)] text-[var(--success-text)] border border-transparent'
+                            : 'bg-[var(--bg-inset)] text-[var(--text-tertiary)] border border-[var(--border)]',
+                      ].join(' ')}
+                    >
+                      {q.position}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Legend */}
+              <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-[var(--border)] pt-3">
+                <span className="flex items-center gap-1.5 text-[0.625rem] text-[var(--text-tertiary)]">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[var(--accent)]" />
+                  Actual
+                </span>
+                <span className="flex items-center gap-1.5 text-[0.625rem] text-[var(--text-tertiary)]">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[var(--success-soft)] border border-[var(--success-text)]" />
+                  Respondida
+                </span>
+                <span className="flex items-center gap-1.5 text-[0.625rem] text-[var(--text-tertiary)]">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-[var(--bg-inset)] border border-[var(--border)]" />
+                  Pendiente
+                </span>
+              </div>
+            </div>
+
+            {/* Compact stats */}
+            <div className="mt-3 card px-4 py-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[var(--text-tertiary)]">Progreso</span>
+                <span className="font-semibold tabular-nums text-[var(--text-primary)]">
+                  {answeredCount}/{questions.length}
+                </span>
+              </div>
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--bg-inset)]">
+                <div
+                  className="h-full rounded-full bg-[var(--accent)] transition-all duration-300 ease-out"
+                  style={{ width: `${(answeredCount / questions.length) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </aside>
       </div>
 
-      {/* Question map */}
-      <div className="mt-8 card p-5">
+      {/* Mobile-only question map (shown below on small screens) */}
+      <div className="mt-6 card p-4 lg:hidden">
         <p className="kicker mb-3">Mapa del examen</p>
         <div className="flex flex-wrap gap-1.5">
           {questions.map((q, idx) => {
@@ -367,7 +460,7 @@ function DiagnosticTab({ session }: { session: { studentId: string; email: strin
                 type="button"
                 onClick={() => setCurrentIndex(idx)}
                 className={[
-                  'flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] text-xs font-semibold transition',
+                  'flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-[0.6875rem] font-semibold transition',
                   isCurrent
                     ? 'bg-[var(--accent)] text-[var(--text-inverted)]'
                     : isAnswered
@@ -381,18 +474,6 @@ function DiagnosticTab({ session }: { session: { studentId: string; email: strin
           })}
         </div>
       </div>
-
-      {/* Errors */}
-      {answerMutation.error ? (
-        <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--border-accent)] bg-[var(--accent-soft)] p-4 text-sm font-medium text-[var(--accent-text)]">
-          {answerMutation.error instanceof Error ? answerMutation.error.message : 'No se pudo guardar la respuesta.'}
-        </div>
-      ) : null}
-      {completeMutation.error ? (
-        <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--border-accent)] bg-[var(--accent-soft)] p-4 text-sm font-medium text-[var(--accent-text)]">
-          {completeMutation.error instanceof Error ? completeMutation.error.message : 'No se pudo completar el diagnostico.'}
-        </div>
-      ) : null}
     </div>
   )
 }

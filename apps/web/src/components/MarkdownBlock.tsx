@@ -6,11 +6,12 @@ const math = createMathPlugin({
   singleDollarTextMath: true,
 })
 
-export default function MarkdownBlock({ markdown }: { markdown: string }) {
+export default function MarkdownBlock({ markdown, controls = false }: { markdown: string; controls?: boolean }) {
   return (
     <Streamdown
       className="markdown-body"
       plugins={{ math }}
+      controls={controls}
     >
       {markdown}
     </Streamdown>
