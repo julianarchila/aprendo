@@ -301,6 +301,8 @@ export const getStudentLatestDiagnostic = query({
       )
       .collect()
 
-    return sessions.sort((a, b) => (b.completedAt ?? b.startedAt) - (a.completedAt ?? a.startedAt))[0] ?? null
+    return sessions
+      .filter((session) => session.status === 'completed')
+      .sort((a, b) => (b.completedAt ?? b.startedAt) - (a.completedAt ?? a.startedAt))[0] ?? null
   },
 })
