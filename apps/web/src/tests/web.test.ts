@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { latestDiagnosticQuery, practiceSessionQuery, studentProgressQuery } from '../lib/student-queries'
+import {
+  latestDiagnosticQuery,
+  practiceSessionQuery,
+  practiceTutorThreadQuery,
+  studentProgressQuery,
+} from '../lib/student-queries'
 
 describe('web scaffold', () => {
   it('keeps the initial workspace test suite green', () => {
@@ -20,6 +25,11 @@ describe('web scaffold', () => {
     expect(practiceSessionQuery(null)).toMatchObject({
       enabled: false,
       queryKey: ['convexQuery', 'practice:getPracticeSession', 'skip'],
+    })
+
+    expect(practiceTutorThreadQuery('', undefined)).toMatchObject({
+      enabled: false,
+      queryKey: ['convexQuery', 'tutor:getPracticeTutorThread', 'skip'],
     })
   })
 })

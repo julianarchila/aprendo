@@ -92,6 +92,15 @@ export default defineSchema(
       diagnosticBaseline: v.optional(studentSummaryValidator),
       overallSummary: studentSummaryValidator,
     }).index('by_studentId', ['studentId']),
+    practiceTutorThreads: defineTable({
+      practiceSessionId: v.id('sessions'),
+      studentId: v.id('students'),
+      threadId: v.string(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index('by_practiceSessionId', ['practiceSessionId'])
+      .index('by_studentId', ['studentId']),
   },
   { schemaValidation: true },
 )

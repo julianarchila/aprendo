@@ -757,6 +757,17 @@ pre code {
   gap: 0.45rem;
 }
 
+.practice-tutor-header-compact {
+  align-items: center;
+  padding: 0.65rem 0.85rem 0.3rem;
+}
+
+.practice-panel-title-group-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.7rem;
+}
+
 .practice-tutor-title,
 .practice-feedback-title {
   margin: 0.2rem 0 0;
@@ -764,6 +775,11 @@ pre code {
   font-size: clamp(1.1rem, 1rem + 0.3vw, 1.45rem);
   line-height: 1.05;
   letter-spacing: -0.03em;
+}
+
+.practice-tutor-header-compact .practice-tutor-title {
+  margin: 0;
+  font-size: 1.05rem;
 }
 
 .practice-stage-kicker {
@@ -911,6 +927,11 @@ pre code {
   border: 1px solid var(--border-accent);
 }
 
+.practice-tutor-header-compact .practice-section-icon {
+  width: 2rem;
+  height: 2rem;
+}
+
 .practice-tutor-status {
   display: inline-flex;
   align-items: center;
@@ -921,6 +942,10 @@ pre code {
   color: var(--text-secondary);
   font-size: 0.7rem;
   font-weight: 700;
+}
+
+.practice-tutor-header-compact .practice-tutor-status {
+  padding: 0.35rem 0.6rem;
 }
 
 .practice-prompt-row {
@@ -955,7 +980,7 @@ pre code {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  overflow: auto;
+  overflow: hidden;
   padding: 0.8rem 1rem 0.7rem;
 }
 

@@ -55,6 +55,20 @@ export function practiceSessionQuery(sessionId: string | null | undefined) {
   })
 }
 
+export function practiceTutorThreadQuery(
+  practiceSessionId: string | null | undefined,
+  studentId: string | null | undefined,
+) {
+  if (!hasValue(practiceSessionId) || !hasValue(studentId)) {
+    return convexQuery(api.tutor.getPracticeTutorThread, 'skip')
+  }
+
+  return convexQuery(api.tutor.getPracticeTutorThread, {
+    practiceSessionId: practiceSessionId as never,
+    studentId: studentId as never,
+  })
+}
+
 export function studentProgressQuery(studentId: string | null | undefined) {
   if (!hasValue(studentId)) {
     return convexQuery(api.progress.getStudentProgress, 'skip')

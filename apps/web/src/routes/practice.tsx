@@ -2,12 +2,18 @@ import { useConvexMutation } from '@convex-dev/react-query'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
-import { Bot, ChevronLeft, ChevronRight, SendHorizontal, Sparkles } from 'lucide-react'
+import { Bot, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
+import { extractText } from '@convex-dev/agent'
+import { useThreadMessages } from '@convex-dev/agent/react'
 import { api } from '@aprendo/convex/api'
+import { useAction } from 'convex/react'
 import MarkdownBlock from '../components/MarkdownBlock.tsx'
+import { Conversation, ConversationContent, ConversationScrollButton } from '../components/ai-elements/conversation.tsx'
+import { Message, MessageContent, MessageResponse } from '../components/ai-elements/message.tsx'
+import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputSubmit, PromptInputTextarea, PromptInputTools } from '../components/ai-elements/prompt-input.tsx'
 import { StudentAppShell } from '../components/StudentAppShell.tsx'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable.tsx'
-import { practiceSessionQuery, studentAppStateQuery } from '../lib/student-queries.ts'
+import { practiceSessionQuery, practiceTutorThreadQuery, studentAppStateQuery } from '../lib/student-queries.ts'
 import { useStoredStudentSession } from '../lib/student-session.ts'
 import { getSubjectLabel, getSubtopicLabel } from '../lib/taxonomy.ts'
 
@@ -19,26 +25,6 @@ type ChatMessage = {
   content: string
 }
 
-const INITIAL_CHAT: ChatMessage[] = [
-  {
-    id: 'welcome',
-    role: 'assistant',
-    content: 'Tutor en simulacion. La UI ya esta lista y la conectaremos en la siguiente fase.',
-  },
-]
-
-const PRE_ANSWER_PROMPTS = [
-  'Dame una pista',
-  'Aclara el enunciado',
-  'Como empiezo',
-]
-
-const POST_ANSWER_PROMPTS = [
-  'Explicame la respuesta',
-  'Por que mi opcion no era',
-  'Dame un problema similar',
-]
-
 export const Route = createFileRoute('/practice')({
   component: PracticePage,
 })
@@ -47,6 +33,7 @@ function PracticePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { session, isReady } = useStoredStudentSession()
+  const studentId = session?.studentId ?? null
   const appStateQuery = useQuery({
     ...studentAppStateQuery(session?.studentId),
     enabled: isReady && session != null,
@@ -55,12 +42,14 @@ function PracticePage() {
   const createPracticeSession = useConvexMutation(api.practice.createOrGetPracticeSession)
   const submitPracticeAnswer = useConvexMutation(api.practice.submitPracticeAnswer)
   const completePracticeSession = useConvexMutation(api.practice.completePracticeSession)
+  const createTutorThread = useConvexMutation(api.tutor.createOrGetPracticeTutorThread)
+  const sendTutorMessage = useAction(api.tutor.sendPracticeTutorMessage)
 
   const [practiceSessionId, setPracticeSessionId] = useState<string | null>(null)
   const [hasTriedSessionCreation, setHasTriedSessionCreation] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [hasSyncedInitialPosition, setHasSyncedInitialPosition] = useState(false)
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(INITIAL_CHAT)
+  const [hasEnsuredTutorThread, setHasEnsuredTutorThread] = useState(false)
   const [draft, setDraft] = useState('')
   const [practiceOrientation, setPracticeOrientation] = useState<'horizontal' | 'vertical'>('horizontal')
   const questionStartedAtRef = useRef<number>(Date.now())
@@ -110,10 +99,30 @@ function PracticePage() {
 
   const practice = practiceQuery.data
   const questions = practice?.questions ?? []
+  const tutorThreadQuery = useQuery({
+    ...practiceTutorThreadQuery(practiceSessionId, studentId),
+    enabled: practiceSessionId != null && hasEnsuredTutorThread,
+  })
+  const tutorThreadId = tutorThreadQuery.data?.threadId ?? null
+  const tutorMessagesResult = useThreadMessages(
+    api.tutor.listPracticeTutorMessages,
+    tutorThreadId == null || practiceSessionId == null || studentId == null
+      ? 'skip'
+      : {
+        practiceSessionId: practiceSessionId as never,
+        studentId: studentId as never,
+        threadId: tutorThreadId,
+      },
+    {
+      initialNumItems: 50,
+      stream: true,
+    },
+  )
 
   useEffect(() => {
     if (practiceSessionId == null) {
       setHasSyncedInitialPosition(false)
+      setHasEnsuredTutorThread(false)
     }
   }, [practiceSessionId])
 
@@ -122,6 +131,23 @@ function PracticePage() {
     setCurrentIndex(Math.max(0, practice.session.currentPosition - 1))
     setHasSyncedInitialPosition(true)
   }, [hasSyncedInitialPosition, practice?.session])
+
+  useEffect(() => {
+    if (practice?.session == null || studentId == null || hasEnsuredTutorThread || createSessionMutation.isPending) return
+
+    createTutorThread({
+      practiceSessionId: practice.session._id,
+      studentId: studentId as never,
+    })
+      .then(() => setHasEnsuredTutorThread(true))
+      .catch(() => setHasEnsuredTutorThread(false))
+  }, [
+    createSessionMutation.isPending,
+    createTutorThread,
+    hasEnsuredTutorThread,
+    practice?.session,
+    studentId,
+  ])
 
   useEffect(() => {
     questionStartedAtRef.current = Date.now()
@@ -172,6 +198,25 @@ function PracticePage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries()
       await navigate({ to: '/progress' })
+    },
+  })
+
+  const tutorMutation = useMutation({
+    mutationFn: async (prompt: string) => {
+      if (practice?.session == null || studentId == null) {
+        throw new Error('Practice session not loaded.')
+      }
+      return sendTutorMessage({
+        practiceSessionId: practice.session._id,
+        studentId: studentId as never,
+        prompt,
+      })
+    },
+    onSuccess: async () => {
+      if (practiceSessionId == null) return
+      await queryClient.invalidateQueries({
+        queryKey: practiceTutorThreadQuery(practiceSessionId, studentId).queryKey,
+      })
     },
   })
 
@@ -247,76 +292,26 @@ function PracticePage() {
   const answeredCount = questions.filter((question) => question.attempt != null).length
   const selectedOption = currentQuestion.attempt?.selectedOption ?? null
   const hasAnswered = selectedOption != null
-  const prompts = hasAnswered ? POST_ANSWER_PROMPTS : PRE_ANSWER_PROMPTS
-  const activeQuestion = currentQuestion
+  const tutorMessages: ChatMessage[] = [
+    {
+      id: 'welcome',
+      role: 'assistant',
+      content: 'Tutor basico activo. Por ahora responde sin contexto automatico de la pregunta actual.',
+    },
+    ...tutorMessagesResult.results.flatMap((message) => {
+      if (message.message == null) return []
+      if (message.message.role !== 'user' && message.message.role !== 'assistant') return []
 
-  function pushAssistantReply(content: string) {
-    setChatMessages((current) => [
-      ...current,
-      {
-        id: `assistant-${current.length + 1}`,
-        role: 'assistant',
+      const content = extractText(message.message)?.trim() ?? ''
+      if (content.length === 0) return []
+
+      return [{
+        id: message.key,
+        role: message.message.role as ChatRole,
         content,
-      },
-    ])
-  }
-
-  function handlePrompt(prompt: string) {
-    setChatMessages((current) => [
-      ...current,
-      {
-        id: `user-${current.length + 1}`,
-        role: 'user',
-        content: prompt,
-      },
-    ])
-
-    if (prompt === 'Dame una pista') {
-      pushAssistantReply('Pista simulada. En la siguiente fase esta accion consultara el tutor real con el contexto de esta pregunta.')
-      return
-    }
-    if (prompt === 'Aclara el enunciado') {
-      pushAssistantReply('Aclaracion simulada. La UI ya esta preparada para conectar respuestas contextuales mas adelante.')
-      return
-    }
-    if (prompt === 'Como empiezo') {
-      pushAssistantReply('Inicio sugerido simulado. Por ahora enfocate en identificar que dato o relacion intenta evaluar la pregunta.')
-      return
-    }
-    if (prompt === 'Explicame la respuesta') {
-      pushAssistantReply(
-        activeQuestion.question.answerSolutionMarkdown
-          ?? 'Todavia no hay una explicacion detallada disponible para esta pregunta.',
-      )
-      return
-    }
-    if (prompt === 'Por que mi opcion no era') {
-      pushAssistantReply('Respuesta simulada. En la siguiente fase el tutor comparara tu opcion con la correcta.')
-      return
-    }
-
-    pushAssistantReply('Generacion de ejercicio similar simulada. Lo conectaremos despues del MVP de practica.')
-  }
-
-  function handleSendMessage() {
-    const content = draft.trim()
-    if (!content) return
-
-    setChatMessages((current) => [
-      ...current,
-      {
-        id: `user-${current.length + 1}`,
-        role: 'user',
-        content,
-      },
-      {
-        id: `assistant-${current.length + 2}`,
-        role: 'assistant',
-        content: 'Tutor en simulacion. Esta caja sigue siendo local y no guarda estado en backend todavia.',
-      },
-    ])
-    setDraft('')
-  }
+      }]
+    }),
+  ]
 
   return (
     <StudentAppShell
@@ -451,73 +446,68 @@ function PracticePage() {
           className="practice-panel"
         >
           <aside className="practice-tutor card stagger-1">
-            <div className="practice-tutor-header">
-              <div className="practice-panel-title-group">
+            <div className="practice-tutor-header practice-tutor-header-compact">
+              <div className="practice-panel-title-group practice-panel-title-group-inline">
                 <span className="practice-section-icon">
                   <Bot size={18} />
                 </span>
-                <div>
-                  <p className="kicker">Tutor</p>
-                  <h2 className="practice-tutor-title">Interfaz simulada</h2>
-                </div>
+                <h2 className="practice-tutor-title">Tutor</h2>
               </div>
               <span className="practice-tutor-status">
                 <Sparkles size={14} />
-                Proximamente
+                Basico
               </span>
             </div>
 
-            <div className="practice-prompt-row">
-              {prompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => handlePrompt(prompt)}
-                  className="practice-prompt-chip"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
+            <Conversation className="practice-thread practice-thread-compact rounded-none border-0 bg-transparent">
+              <ConversationContent className="gap-4 px-0 py-2">
+                {tutorMessages.map((message) => (
+                  <Message
+                    key={message.id}
+                    from={message.role}
+                  >
+                    <MessageContent>
+                      <MessageResponse>
+                        <MarkdownBlock markdown={message.content} />
+                      </MessageResponse>
+                    </MessageContent>
+                  </Message>
+                ))}
+              </ConversationContent>
+              <ConversationScrollButton />
+            </Conversation>
 
-            <div className="practice-thread practice-thread-compact">
-              {chatMessages.map((message) => (
-                <div
-                  key={message.id}
-                  className={[
-                    'practice-message',
-                    message.role === 'assistant' ? 'is-assistant' : 'is-user',
-                  ].join(' ')}
-                >
-                  {message.role === 'assistant' ? (
-                    <span className="practice-avatar">
-                      <Sparkles size={14} />
-                    </span>
-                  ) : null}
-                  <div className="practice-bubble">
-                    <p>{message.content}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="practice-composer">
-              <textarea
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                rows={2}
-                className="practice-textarea"
-                placeholder="Esta conversacion sigue siendo local por ahora..."
-              />
-              <button
-                type="button"
-                onClick={handleSendMessage}
-                className="practice-send-button"
-                aria-label="Enviar mensaje"
-              >
-                <SendHorizontal size={18} />
-              </button>
-            </div>
+            <PromptInput
+              className="mt-auto"
+              onSubmit={(message) => {
+                const text = message.text.trim()
+                if (!text) return
+                tutorMutation.mutate(text)
+                setDraft('')
+              }}
+            >
+              <PromptInputBody>
+                <PromptInputTextarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  placeholder="Escribe un mensaje para el tutor..."
+                />
+              </PromptInputBody>
+              <PromptInputFooter>
+                <PromptInputTools />
+                <PromptInputSubmit
+                  type="submit"
+                  status={tutorMutation.isPending ? 'streaming' : 'ready'}
+                  disabled={tutorMutation.isPending || !hasEnsuredTutorThread || tutorThreadId == null || draft.trim().length === 0}
+                  aria-label="Enviar mensaje"
+                />
+              </PromptInputFooter>
+            </PromptInput>
+            {tutorMutation.error ? (
+              <div className="px-4 pb-4 text-sm font-medium text-[var(--accent-text)]">
+                {tutorMutation.error instanceof Error ? tutorMutation.error.message : 'No se pudo enviar el mensaje al tutor.'}
+              </div>
+            ) : null}
           </aside>
         </ResizablePanel>
       </ResizablePanelGroup>
