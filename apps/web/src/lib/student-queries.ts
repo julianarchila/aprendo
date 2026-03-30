@@ -45,6 +45,16 @@ export function latestDiagnosticQuery(studentId: string | null | undefined) {
   })
 }
 
+export function practiceSessionQuery(sessionId: string | null | undefined) {
+  if (!hasValue(sessionId)) {
+    return convexQuery(api.practice.getPracticeSession, 'skip')
+  }
+
+  return convexQuery(api.practice.getPracticeSession, {
+    sessionId: sessionId as never,
+  })
+}
+
 export function studentProgressQuery(studentId: string | null | undefined) {
   if (!hasValue(studentId)) {
     return convexQuery(api.progress.getStudentProgress, 'skip')

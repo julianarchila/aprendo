@@ -12,6 +12,7 @@ import type * as diagnostics from "../diagnostics.js";
 import type * as myFunctions from "../myFunctions.js";
 import type * as pdfPipeline from "../pdfPipeline.js";
 import type * as pdfs from "../pdfs.js";
+import type * as practice from "../practice.js";
 import type * as progress from "../progress.js";
 import type * as students from "../students.js";
 import type * as validators from "../validators.js";
@@ -27,6 +28,7 @@ declare const fullApi: ApiFromModules<{
   myFunctions: typeof myFunctions;
   pdfPipeline: typeof pdfPipeline;
   pdfs: typeof pdfs;
+  practice: typeof practice;
   progress: typeof progress;
   students: typeof students;
   validators: typeof validators;
