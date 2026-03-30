@@ -9,19 +9,43 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ProgressRouteImport } from './routes/progress'
+import { Route as PracticeRouteImport } from './routes/practice'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as DiagnosticRouteImport } from './routes/diagnostic'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as AppRouteImport } from './routes/app'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 
+const ProgressRoute = ProgressRouteImport.update({
+  id: '/progress',
+  path: '/progress',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PracticeRoute = PracticeRouteImport.update({
+  id: '/practice',
+  path: '/practice',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DiagnosticRoute = DiagnosticRouteImport.update({
+  id: '/diagnostic',
+  path: '/diagnostic',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/app',
+  path: '/app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -38,39 +62,94 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/app': typeof AppRoute
   '/dashboard': typeof DashboardRoute
+  '/diagnostic': typeof DiagnosticRoute
   '/login': typeof LoginRoute
+  '/practice': typeof PracticeRoute
+  '/progress': typeof ProgressRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/app': typeof AppRoute
   '/dashboard': typeof DashboardRoute
+  '/diagnostic': typeof DiagnosticRoute
   '/login': typeof LoginRoute
+  '/practice': typeof PracticeRoute
+  '/progress': typeof ProgressRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/app': typeof AppRoute
   '/dashboard': typeof DashboardRoute
+  '/diagnostic': typeof DiagnosticRoute
   '/login': typeof LoginRoute
+  '/practice': typeof PracticeRoute
+  '/progress': typeof ProgressRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/dashboard' | '/login'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/app'
+    | '/dashboard'
+    | '/diagnostic'
+    | '/login'
+    | '/practice'
+    | '/progress'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/dashboard' | '/login'
-  id: '__root__' | '/' | '/admin' | '/dashboard' | '/login'
+  to:
+    | '/'
+    | '/admin'
+    | '/app'
+    | '/dashboard'
+    | '/diagnostic'
+    | '/login'
+    | '/practice'
+    | '/progress'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/app'
+    | '/dashboard'
+    | '/diagnostic'
+    | '/login'
+    | '/practice'
+    | '/progress'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  AppRoute: typeof AppRoute
   DashboardRoute: typeof DashboardRoute
+  DiagnosticRoute: typeof DiagnosticRoute
   LoginRoute: typeof LoginRoute
+  PracticeRoute: typeof PracticeRoute
+  ProgressRoute: typeof ProgressRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/progress': {
+      id: '/progress'
+      path: '/progress'
+      fullPath: '/progress'
+      preLoaderRoute: typeof ProgressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/practice': {
+      id: '/practice'
+      path: '/practice'
+      fullPath: '/practice'
+      preLoaderRoute: typeof PracticeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -78,11 +157,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/diagnostic': {
+      id: '/diagnostic'
+      path: '/diagnostic'
+      fullPath: '/diagnostic'
+      preLoaderRoute: typeof DiagnosticRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -105,8 +198,12 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  AppRoute: AppRoute,
   DashboardRoute: DashboardRoute,
+  DiagnosticRoute: DiagnosticRoute,
   LoginRoute: LoginRoute,
+  PracticeRoute: PracticeRoute,
+  ProgressRoute: ProgressRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

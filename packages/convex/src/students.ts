@@ -65,3 +65,37 @@ export const getStudent = query({
     return ctx.db.get(args.studentId)
   },
 })
+
+export const getStudentAppState = query({
+  args: {
+    studentId: v.id('students'),
+  },
+  handler: async (ctx, args) => {
+    const student = await ctx.db.get(args.studentId)
+    if (student == null) {
+      return null
+    }
+
+    const sessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_studentId_type', (q) =>
+        q.eq('studentId', args.studentId).eq('type', 'diagnostic'),
+      )
+      .collect()
+
+    const activeDiagnostic = sessions.find(
+      (session) => session.status === 'in_progress' || session.status === 'created',
+    ) ?? null
+    const latestCompletedDiagnostic = sessions
+      .filter((session) => session.status === 'completed')
+      .sort((a, b) => (b.completedAt ?? b.startedAt) - (a.completedAt ?? a.startedAt))[0] ?? null
+
+    return {
+      studentId: student._id,
+      hasCompletedDiagnostic: latestCompletedDiagnostic != null,
+      activeDiagnosticSessionId: activeDiagnostic?._id ?? null,
+      latestCompletedDiagnosticId: latestCompletedDiagnostic?._id ?? null,
+      defaultRoute: latestCompletedDiagnostic != null ? '/practice' as const : '/diagnostic' as const,
+    }
+  },
+})

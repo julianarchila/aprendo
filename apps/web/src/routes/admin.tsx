@@ -116,10 +116,10 @@ function AdminPage() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <Link
-              to="/dashboard"
+              to="/app"
               className="btn-ghost text-xs no-underline"
             >
-              Dashboard
+              App
             </Link>
           </div>
         </div>

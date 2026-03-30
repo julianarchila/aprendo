@@ -23,7 +23,7 @@ function LoginPage() {
     onSuccess: async (student) => {
       saveSession({ studentId: student._id, email: student.email })
       setErrorMessage(null)
-      await navigate({ to: '/dashboard' })
+      await navigate({ to: '/app' })
     },
     onError: (error) => {
       setErrorMessage(error instanceof Error ? error.message : String(error))
@@ -43,10 +43,10 @@ function LoginPage() {
               {session.email}
             </p>
             <Link
-              to="/dashboard"
+              to="/app"
               className="btn-primary w-full justify-center no-underline"
             >
-              Ir al dashboard
+              Continuar
             </Link>
           </div>
         </div>

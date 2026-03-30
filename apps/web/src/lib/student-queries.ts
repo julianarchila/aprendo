@@ -15,6 +15,16 @@ export function studentQuery(studentId: string | null | undefined) {
   })
 }
 
+export function studentAppStateQuery(studentId: string | null | undefined) {
+  if (!hasValue(studentId)) {
+    return convexQuery(api.students.getStudentAppState, 'skip')
+  }
+
+  return convexQuery(api.students.getStudentAppState, {
+    studentId: studentId as never,
+  })
+}
+
 export function diagnosticSessionQuery(sessionId: string | null | undefined) {
   if (!hasValue(sessionId)) {
     return convexQuery(api.diagnostics.getDiagnosticSession, 'skip')

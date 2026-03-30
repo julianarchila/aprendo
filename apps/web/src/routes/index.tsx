@@ -39,14 +39,20 @@ function LandingPage() {
             {isReady && session ? (
               <>
                 <Link
-                  to="/dashboard"
+                  to="/app"
                   className="btn-primary px-8 py-3 text-base no-underline"
                 >
-                  Ir al dashboard
+                  Continuar
                 </Link>
                 <p className="mt-1 text-sm text-[var(--text-tertiary)]">
                   Sesion activa: {session.email}
                 </p>
+                <Link
+                  to="/practice"
+                  className="btn-ghost text-sm no-underline"
+                >
+                  Ver practica guiada
+                </Link>
               </>
             ) : (
               <>
