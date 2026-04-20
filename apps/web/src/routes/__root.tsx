@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
+import { TooltipProvider } from "@/components/ui/tooltip"
 
 import appCss from '../styles.css?url'
 
@@ -46,7 +47,9 @@ function RootComponent() {
         <HeadContent />
       </head>
       <body className="font-sans antialiased [overflow-wrap:anywhere] selection:bg-[var(--accent-soft)]">
-        <Outlet />
+        <TooltipProvider>
+          <Outlet />
+        </TooltipProvider>
         <TanStackDevtools
           config={{
             position: 'bottom-right',
