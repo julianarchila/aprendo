@@ -16,7 +16,7 @@
     "@ai-sdk/google": "^3.0.54",
     "@aprendo/ingest": "workspace:*",
     "@convex-dev/agent": "^0.6.1",
-    "ai": "^6.0.141",
+    "ai": "^6.0.168",
     "convex": "^1.33.0"
   },
   "devDependencies": {

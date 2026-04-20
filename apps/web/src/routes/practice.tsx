@@ -8,9 +8,11 @@ import { useThreadMessages } from '@convex-dev/agent/react'
 import { api } from '@aprendo/convex/api'
 import { useAction } from 'convex/react'
 import MarkdownBlock from '../components/MarkdownBlock.tsx'
-import { Conversation, ConversationContent, ConversationScrollButton } from '../components/ai-elements/conversation.tsx'
-import { Message, MessageContent, MessageResponse } from '../components/ai-elements/message.tsx'
+import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from '../components/ai-elements/conversation.tsx'
+import { Message, MessageContent } from '../components/ai-elements/message.tsx'
 import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputSubmit, PromptInputTextarea, PromptInputTools } from '../components/ai-elements/prompt-input.tsx'
+import { Shimmer } from '../components/ai-elements/shimmer.tsx'
+import { Suggestion, Suggestions } from '../components/ai-elements/suggestion.tsx'
 import { StudentAppShell } from '../components/StudentAppShell.tsx'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable.tsx'
 import { practiceSessionQuery, practiceTutorThreadQuery, studentAppStateQuery } from '../lib/student-queries.ts'
@@ -23,7 +25,15 @@ type ChatMessage = {
   id: string
   role: ChatRole
   content: string
+  streaming?: boolean
 }
+
+const TUTOR_SUGGESTIONS = [
+  'Dame una pista',
+  'Explica este tema',
+  'Dame una estrategia',
+  'Explica la respuesta correcta',
+]
 
 export const Route = createFileRoute('/practice')({
   component: PracticePage,
@@ -50,6 +60,7 @@ function PracticePage() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [hasSyncedInitialPosition, setHasSyncedInitialPosition] = useState(false)
   const [hasEnsuredTutorThread, setHasEnsuredTutorThread] = useState(false)
+  const [tutorThreadError, setTutorThreadError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [practiceOrientation, setPracticeOrientation] = useState<'horizontal' | 'vertical'>('horizontal')
   const questionStartedAtRef = useRef<number>(Date.now())
@@ -123,6 +134,7 @@ function PracticePage() {
     if (practiceSessionId == null) {
       setHasSyncedInitialPosition(false)
       setHasEnsuredTutorThread(false)
+      setTutorThreadError(null)
     }
   }, [practiceSessionId])
 
@@ -139,8 +151,19 @@ function PracticePage() {
       practiceSessionId: practice.session._id,
       studentId: studentId as never,
     })
-      .then(() => setHasEnsuredTutorThread(true))
-      .catch(() => setHasEnsuredTutorThread(false))
+      .then(() => {
+        setHasEnsuredTutorThread(true)
+        setTutorThreadError(null)
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to create tutor thread:', error)
+        setHasEnsuredTutorThread(true)
+        setTutorThreadError(
+          error instanceof Error
+            ? error.message
+            : 'No se pudo iniciar el tutor.',
+        )
+      })
   }, [
     createSessionMutation.isPending,
     createTutorThread,
@@ -292,26 +315,32 @@ function PracticePage() {
   const answeredCount = questions.filter((question) => question.attempt != null).length
   const selectedOption = currentQuestion.attempt?.selectedOption ?? null
   const hasAnswered = selectedOption != null
-  const tutorMessages: ChatMessage[] = [
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: 'Tutor basico activo. Por ahora responde sin contexto automatico de la pregunta actual.',
-    },
-    ...tutorMessagesResult.results.flatMap((message) => {
-      if (message.message == null) return []
-      if (message.message.role !== 'user' && message.message.role !== 'assistant') return []
+  const tutorMessages: ChatMessage[] = tutorMessagesResult.results.flatMap((message) => {
+    if (message.message == null) return []
+    if (message.message.role !== 'user' && message.message.role !== 'assistant') return []
 
-      const content = extractText(message.message)?.trim() ?? ''
-      if (content.length === 0) return []
+    const content = extractText(message.message)?.trim() ?? ''
+    if (content.length === 0) return []
 
-      return [{
-        id: message.key,
-        role: message.message.role as ChatRole,
-        content,
-      }]
-    }),
-  ]
+    return [{
+      id: message.key,
+      role: message.message.role as ChatRole,
+      content,
+      streaming: message.streaming === true,
+    }]
+  })
+  const lastMessage = tutorMessages.at(-1)
+  const isTutorThinking = tutorMutation.isPending
+    && (lastMessage?.role !== 'assistant' || lastMessage?.streaming !== true)
+  const canSendTutorMessage = tutorThreadError == null
+    && tutorThreadId != null
+    && !tutorMutation.isPending
+  const sendTutorPrompt = (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed || !canSendTutorMessage) return
+    tutorMutation.mutate(trimmed)
+    setDraft('')
+  }
 
   return (
     <StudentAppShell
@@ -460,31 +489,63 @@ function PracticePage() {
             </div>
 
             <Conversation className="practice-thread practice-thread-compact rounded-none border-0 bg-transparent">
-              <ConversationContent className="gap-4 px-0 py-2">
-                {tutorMessages.map((message) => (
-                  <Message
-                    key={message.id}
-                    from={message.role}
-                  >
-                    <MessageContent>
-                      <MessageResponse>
+              <ConversationContent className="gap-3 px-0 py-2">
+                {tutorMessages.length === 0 ? (
+                  <ConversationEmptyState
+                    className="gap-2 p-4"
+                    icon={
+                      <span className="practice-section-icon">
+                        <Bot size={18} />
+                      </span>
+                    }
+                    title="Pregunta lo que necesites"
+                    description="Puedo darte pistas, explicar un tema o sugerir estrategias. No revelare la respuesta antes de que intentes la pregunta."
+                  />
+                ) : (
+                  tutorMessages.map((message) => (
+                    <Message
+                      key={message.id}
+                      from={message.role}
+                      className={
+                        message.role === 'assistant'
+                          ? 'flex-row items-start gap-2'
+                          : undefined
+                      }
+                    >
+                      {message.role === 'assistant' ? (
+                        <span className="practice-avatar mt-1" aria-hidden>
+                          <Bot size={14} />
+                        </span>
+                      ) : null}
+                      <MessageContent
+                        className={
+                          message.role === 'user'
+                            ? 'group-[.is-user]:bg-[var(--accent-soft)] group-[.is-user]:border group-[.is-user]:border-[var(--border-accent)] group-[.is-user]:text-[var(--text-primary)]'
+                            : 'min-w-0 flex-1 text-[var(--text-primary)]'
+                        }
+                      >
                         <MarkdownBlock markdown={message.content} />
-                      </MessageResponse>
+                      </MessageContent>
+                    </Message>
+                  ))
+                )}
+                {isTutorThinking ? (
+                  <Message from="assistant" className="flex-row items-center gap-2">
+                    <span className="practice-avatar" aria-hidden>
+                      <Bot size={14} />
+                    </span>
+                    <MessageContent className="min-w-0 flex-1 text-[var(--text-secondary)]">
+                      <Shimmer className="text-sm">Pensando...</Shimmer>
                     </MessageContent>
                   </Message>
-                ))}
+                ) : null}
               </ConversationContent>
               <ConversationScrollButton />
             </Conversation>
 
             <PromptInput
-              className="mt-auto"
-              onSubmit={(message) => {
-                const text = message.text.trim()
-                if (!text) return
-                tutorMutation.mutate(text)
-                setDraft('')
-              }}
+              className="mt-auto px-4 pb-3"
+              onSubmit={(message) => sendTutorPrompt(message.text)}
             >
               <PromptInputBody>
                 <PromptInputTextarea
@@ -494,15 +555,31 @@ function PracticePage() {
                 />
               </PromptInputBody>
               <PromptInputFooter>
-                <PromptInputTools />
+                <PromptInputTools>
+                  <Suggestions className="gap-1.5">
+                    {TUTOR_SUGGESTIONS.map((suggestion) => (
+                      <Suggestion
+                        key={suggestion}
+                        suggestion={suggestion}
+                        disabled={!canSendTutorMessage}
+                        onClick={(value) => sendTutorPrompt(value)}
+                      />
+                    ))}
+                  </Suggestions>
+                </PromptInputTools>
                 <PromptInputSubmit
                   type="submit"
                   status={tutorMutation.isPending ? 'streaming' : 'ready'}
-                  disabled={tutorMutation.isPending || !hasEnsuredTutorThread || tutorThreadId == null || draft.trim().length === 0}
+                  disabled={!canSendTutorMessage || draft.trim().length === 0}
                   aria-label="Enviar mensaje"
                 />
               </PromptInputFooter>
             </PromptInput>
+            {tutorThreadError ? (
+              <div className="px-4 pb-2 text-sm font-medium text-[var(--accent-text)]">
+                {tutorThreadError}
+              </div>
+            ) : null}
             {tutorMutation.error ? (
               <div className="px-4 pb-4 text-sm font-medium text-[var(--accent-text)]">
                 {tutorMutation.error instanceof Error ? tutorMutation.error.message : 'No se pudo enviar el mensaje al tutor.'}
