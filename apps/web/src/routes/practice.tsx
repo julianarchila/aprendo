@@ -2,7 +2,7 @@ import { useConvexMutation } from '@convex-dev/react-query'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
-import { Bot, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
+import { Bot, ChevronLeft, ChevronRight, Sparkles, Trash2 } from 'lucide-react'
 import { extractText } from '@convex-dev/agent'
 import { useThreadMessages } from '@convex-dev/agent/react'
 import { api } from '@aprendo/convex/api'
@@ -45,6 +45,7 @@ function PracticePage() {
   const submitPracticeAnswer = useConvexMutation(api.practice.submitPracticeAnswer)
   const completePracticeSession = useConvexMutation(api.practice.completePracticeSession)
   const createTutorThread = useConvexMutation(api.tutor.createOrGetPracticeTutorThread)
+  const clearTutorChat = useConvexMutation(api.tutor.clearPracticeTutorChat)
   const sendTutorMessage = useAction(api.tutor.sendPracticeTutorMessage)
 
   const [practiceSessionId, setPracticeSessionId] = useState<string | null>(null)
@@ -216,15 +217,34 @@ function PracticePage() {
     },
   })
 
+  const clearTutorMutation = useMutation({
+    mutationFn: async () => {
+      if (practice?.session == null || studentId == null) {
+        throw new Error('Practice session not loaded.')
+      }
+      return clearTutorChat({
+        practiceSessionId: practice.session._id,
+        studentId: studentId as never,
+      })
+    },
+    onSuccess: async () => {
+      if (practiceSessionId == null) return
+      await queryClient.invalidateQueries({
+        queryKey: practiceTutorThreadQuery(practiceSessionId, studentId).queryKey,
+      })
+    },
+  })
+
   const tutorMutation = useMutation({
-    mutationFn: async (prompt: string) => {
+    mutationFn: async (input: { prompt: string; questionId?: string }) => {
       if (practice?.session == null || studentId == null) {
         throw new Error('Practice session not loaded.')
       }
       return sendTutorMessage({
         practiceSessionId: practice.session._id,
         studentId: studentId as never,
-        prompt,
+        prompt: input.prompt,
+        questionId: input.questionId as never | undefined,
       })
     },
     onSuccess: async () => {
@@ -330,8 +350,24 @@ function PracticePage() {
   const sendTutorPrompt = (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || !canSendTutorMessage) return
-    tutorMutation.mutate(trimmed)
+    tutorMutation.mutate({
+      prompt: trimmed,
+      questionId: currentQuestion.question._id,
+    })
     setDraft('')
+  }
+  const canClearTutorChat = tutorThreadError == null
+    && tutorThreadId != null
+    && tutorMessages.length > 0
+    && !tutorMutation.isPending
+    && !clearTutorMutation.isPending
+  const handleClearTutorChat = () => {
+    if (!canClearTutorChat) return
+    if (typeof window !== 'undefined'
+      && !window.confirm('¿Borrar la conversación con el tutor? Esta acción no se puede deshacer.')) {
+      return
+    }
+    clearTutorMutation.mutate()
   }
 
   return (
@@ -474,10 +510,22 @@ function PracticePage() {
                 </span>
                 <h2 className="practice-tutor-title">Tutor</h2>
               </div>
-              <span className="practice-tutor-status">
-                <Sparkles size={14} />
-                Basico
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="practice-tutor-status">
+                  <Sparkles size={14} />
+                  Basico
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearTutorChat}
+                  disabled={!canClearTutorChat}
+                  title="Borrar conversación"
+                  aria-label="Borrar conversación"
+                  className="btn-ghost px-2 py-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-40"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
 
             <Conversation className="practice-thread practice-thread-compact rounded-none border-0 bg-transparent">
@@ -563,6 +611,11 @@ function PracticePage() {
             {tutorMutation.error ? (
               <div className="px-4 pb-4 text-sm font-medium text-[var(--accent-text)]">
                 {tutorMutation.error instanceof Error ? tutorMutation.error.message : 'No se pudo enviar el mensaje al tutor.'}
+              </div>
+            ) : null}
+            {clearTutorMutation.error ? (
+              <div className="px-4 pb-4 text-sm font-medium text-[var(--accent-text)]">
+                {clearTutorMutation.error instanceof Error ? clearTutorMutation.error.message : 'No se pudo borrar la conversación.'}
               </div>
             ) : null}
           </aside>
