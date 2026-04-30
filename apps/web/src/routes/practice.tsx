@@ -10,9 +10,8 @@ import { useAction } from 'convex/react'
 import MarkdownBlock from '../components/MarkdownBlock.tsx'
 import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from '../components/ai-elements/conversation.tsx'
 import { Message, MessageContent } from '../components/ai-elements/message.tsx'
-import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputSubmit, PromptInputTextarea, PromptInputTools } from '../components/ai-elements/prompt-input.tsx'
+import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputSubmit, PromptInputTextarea } from '../components/ai-elements/prompt-input.tsx'
 import { Shimmer } from '../components/ai-elements/shimmer.tsx'
-import { Suggestion, Suggestions } from '../components/ai-elements/suggestion.tsx'
 import { StudentAppShell } from '../components/StudentAppShell.tsx'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable.tsx'
 import { practiceSessionQuery, practiceTutorThreadQuery, studentAppStateQuery } from '../lib/student-queries.ts'
@@ -27,13 +26,6 @@ type ChatMessage = {
   content: string
   streaming?: boolean
 }
-
-const TUTOR_SUGGESTIONS = [
-  'Dame una pista',
-  'Explica este tema',
-  'Dame una estrategia',
-  'Explica la respuesta correcta',
-]
 
 export const Route = createFileRoute('/practice')({
   component: PracticePage,
@@ -555,18 +547,6 @@ function PracticePage() {
                 />
               </PromptInputBody>
               <PromptInputFooter>
-                <PromptInputTools>
-                  <Suggestions className="gap-1.5">
-                    {TUTOR_SUGGESTIONS.map((suggestion) => (
-                      <Suggestion
-                        key={suggestion}
-                        suggestion={suggestion}
-                        disabled={!canSendTutorMessage}
-                        onClick={(value) => sendTutorPrompt(value)}
-                      />
-                    ))}
-                  </Suggestions>
-                </PromptInputTools>
                 <PromptInputSubmit
                   type="submit"
                   status={tutorMutation.isPending ? 'streaming' : 'ready'}
