@@ -1,4 +1,12 @@
-import { Group, Panel, Separator, type GroupProps, type PanelProps, type SeparatorProps } from 'react-resizable-panels'
+import {
+  Group,
+  Panel,
+  Separator,
+  type GroupProps,
+  type PanelImperativeHandle,
+  type PanelProps,
+  type SeparatorProps,
+} from 'react-resizable-panels'
 
 function joinClasses(...values: Array<string | undefined>) {
   return values.filter(Boolean).join(' ')
@@ -32,3 +40,5 @@ export function ResizableHandle({ className, ...props }: SeparatorProps) {
     </Separator>
   )
 }
+
+export type { PanelImperativeHandle }

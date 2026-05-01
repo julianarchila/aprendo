@@ -1,8 +1,15 @@
 import { useConvexMutation } from '@convex-dev/react-query'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
-import { Bot, ChevronLeft, ChevronRight, Sparkles, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Bot,
+  ChevronLeft,
+  ChevronRight,
+  PanelRightClose,
+  Sparkles,
+  Trash2,
+} from 'lucide-react'
 import { extractText } from '@convex-dev/agent'
 import { useThreadMessages } from '@convex-dev/agent/react'
 import { api } from '@aprendo/convex/api'
@@ -13,7 +20,11 @@ import { Message, MessageContent } from '../components/ai-elements/message.tsx'
 import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputSubmit, PromptInputTextarea } from '../components/ai-elements/prompt-input.tsx'
 import { Shimmer } from '../components/ai-elements/shimmer.tsx'
 import { StudentAppShell } from '../components/StudentAppShell.tsx'
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable.tsx'
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from '../components/ui/resizable.tsx'
 import { practiceSessionQuery, practiceTutorThreadQuery, studentAppStateQuery } from '../lib/student-queries.ts'
 import { useStoredStudentSession } from '../lib/student-session.ts'
 import { getSubjectLabel, getSubtopicLabel } from '../lib/taxonomy.ts'
@@ -25,6 +36,29 @@ type ChatMessage = {
   role: ChatRole
   content: string
   streaming?: boolean
+}
+
+const TUTOR_COLLAPSED_STORAGE_KEY = 'aprendo:practice:tutor-collapsed'
+const LAYOUT_STORAGE_KEY = 'aprendo:practice:workspace-layout-v2'
+const STAGE_PANEL_ID = 'aprendo-practice-stage'
+const TUTOR_PANEL_ID = 'aprendo-practice-tutor'
+const QUICK_PROMPTS = [
+  'Dame una pista para esta pregunta',
+  'Explícame el tema relacionado',
+  '¿Por dónde empiezo a resolver esto?',
+] as const
+
+function readStoredLayout(): { [id: string]: number } | undefined {
+  if (typeof window === 'undefined') return undefined
+  try {
+    const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY)
+    if (!raw) return undefined
+    const parsed = JSON.parse(raw)
+    if (parsed && typeof parsed === 'object') return parsed as { [id: string]: number }
+  } catch {
+    // ignore
+  }
+  return undefined
 }
 
 export const Route = createFileRoute('/practice')({
@@ -56,7 +90,14 @@ function PracticePage() {
   const [tutorThreadError, setTutorThreadError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [practiceOrientation, setPracticeOrientation] = useState<'horizontal' | 'vertical'>('horizontal')
+  const [isCompactViewport, setIsCompactViewport] = useState(false)
+  const [isTutorSheetOpen, setIsTutorSheetOpen] = useState(false)
+  const [isTutorCollapsed, setIsTutorCollapsed] = useState(false)
   const questionStartedAtRef = useRef<number>(Date.now())
+  const storedLayoutRef = useRef<{ [id: string]: number } | undefined>(undefined)
+  if (storedLayoutRef.current === undefined && typeof window !== 'undefined') {
+    storedLayoutRef.current = readStoredLayout()
+  }
 
   const createSessionMutation = useMutation({
     mutationFn: async (studentId: string) => {
@@ -169,19 +210,30 @@ function PracticePage() {
     questionStartedAtRef.current = Date.now()
   }, [currentIndex])
 
+  // Hydrate the persisted tutor-collapsed state once on mount.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const stored = window.localStorage.getItem(TUTOR_COLLAPSED_STORAGE_KEY)
+    if (stored === '1') setIsTutorCollapsed(true)
+  }, [])
+
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const media = window.matchMedia('(max-width: 1200px)')
-    const syncOrientation = () => {
-      setPracticeOrientation(media.matches ? 'vertical' : 'horizontal')
+    const compactMedia = window.matchMedia('(max-width: 1024px)')
+    const tabletMedia = window.matchMedia('(max-width: 1200px)')
+    const sync = () => {
+      setIsCompactViewport(compactMedia.matches)
+      setPracticeOrientation(tabletMedia.matches ? 'vertical' : 'horizontal')
     }
 
-    syncOrientation()
-    media.addEventListener('change', syncOrientation)
+    sync()
+    compactMedia.addEventListener('change', sync)
+    tabletMedia.addEventListener('change', sync)
 
     return () => {
-      media.removeEventListener('change', syncOrientation)
+      compactMedia.removeEventListener('change', sync)
+      tabletMedia.removeEventListener('change', sync)
     }
   }, [])
 
@@ -255,6 +307,116 @@ function PracticePage() {
     },
   })
 
+  const persistTutorCollapsed = useCallback((collapsed: boolean) => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(TUTOR_COLLAPSED_STORAGE_KEY, collapsed ? '1' : '0')
+  }, [])
+
+  const expandTutor = useCallback(() => {
+    setIsTutorCollapsed(false)
+    persistTutorCollapsed(false)
+  }, [persistTutorCollapsed])
+
+  const collapseTutor = useCallback(() => {
+    setIsTutorCollapsed(true)
+    persistTutorCollapsed(true)
+  }, [persistTutorCollapsed])
+
+  const toggleTutor = useCallback(() => {
+    if (isCompactViewport) {
+      setIsTutorSheetOpen((open) => !open)
+      return
+    }
+    setIsTutorCollapsed((prev) => {
+      const next = !prev
+      persistTutorCollapsed(next)
+      return next
+    })
+  }, [isCompactViewport, persistTutorCollapsed])
+
+  const focusTutorInput = useCallback(() => {
+    if (isCompactViewport) {
+      setIsTutorSheetOpen(true)
+    } else if (isTutorCollapsed) {
+      expandTutor()
+    }
+    requestAnimationFrame(() => {
+      if (typeof document === 'undefined') return
+      const node = document.querySelector<HTMLTextAreaElement>('[data-tutor-input]')
+      node?.focus()
+    })
+  }, [expandTutor, isCompactViewport, isTutorCollapsed])
+
+  // Keyboard shortcuts. Active everywhere except inside text inputs (with a
+  // small carve-out for ⌘/Ctrl + K and ⌘/Ctrl + \ which work globally).
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return
+
+      const target = event.target as HTMLElement | null
+      const isTyping = !!target && (
+        target.tagName === 'TEXTAREA'
+        || target.tagName === 'INPUT'
+        || target.isContentEditable
+      )
+
+      const isModified = event.metaKey || event.ctrlKey
+      if (isModified && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        focusTutorInput()
+        return
+      }
+      if (isModified && !event.shiftKey && !event.altKey && event.key === '\\') {
+        event.preventDefault()
+        toggleTutor()
+        return
+      }
+
+      if (isTyping) return
+
+      if (event.key === 'ArrowLeft') {
+        setCurrentIndex((value) => Math.max(0, value - 1))
+        return
+      }
+      if (event.key === 'ArrowRight') {
+        setCurrentIndex((value) => Math.min(questions.length - 1, value + 1))
+        return
+      }
+
+      const upper = event.key.toUpperCase()
+      if (upper.length === 1 && upper >= 'A' && upper <= 'Z') {
+        const current = questions[currentIndex]
+        if (current == null) return
+        if (current.attempt != null) return
+        const match = current.question.options.find((option) => option.label === upper)
+        if (match != null) {
+          event.preventDefault()
+          answerMutation.mutate(match.label)
+        }
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [answerMutation, currentIndex, focusTutorInput, questions, toggleTutor])
+
+  const tutorMessages: ChatMessage[] = useMemo(() => {
+    return tutorMessagesResult.results.flatMap((message) => {
+      if (message.message == null) return []
+      if (message.message.role !== 'user' && message.message.role !== 'assistant') return []
+
+      const content = extractText(message.message)?.trim() ?? ''
+      if (content.length === 0) return []
+
+      return [{
+        id: message.key,
+        role: message.message.role as ChatRole,
+        content,
+        streaming: message.streaming === true,
+      }]
+    })
+  }, [tutorMessagesResult.results])
+
   if (!isReady || session == null || appStateQuery.isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
@@ -327,20 +489,9 @@ function PracticePage() {
   const answeredCount = questions.filter((question) => question.attempt != null).length
   const selectedOption = currentQuestion.attempt?.selectedOption ?? null
   const hasAnswered = selectedOption != null
-  const tutorMessages: ChatMessage[] = tutorMessagesResult.results.flatMap((message) => {
-    if (message.message == null) return []
-    if (message.message.role !== 'user' && message.message.role !== 'assistant') return []
+  const isFirstQuestion = currentIndex === 0
+  const isLastQuestion = currentIndex === questions.length - 1
 
-    const content = extractText(message.message)?.trim() ?? ''
-    if (content.length === 0) return []
-
-    return [{
-      id: message.key,
-      role: message.message.role as ChatRole,
-      content,
-      streaming: message.streaming === true,
-    }]
-  })
   const lastMessage = tutorMessages.at(-1)
   const isTutorThinking = tutorMutation.isPending
     && (lastMessage?.role !== 'assistant' || lastMessage?.streaming !== true)
@@ -355,6 +506,7 @@ function PracticePage() {
       questionId: currentQuestion.question._id,
     })
     setDraft('')
+    if (isCompactViewport) setIsTutorSheetOpen(true)
   }
   const canClearTutorChat = tutorThreadError == null
     && tutorThreadId != null
@@ -370,257 +522,408 @@ function PracticePage() {
     clearTutorMutation.mutate()
   }
 
+  const goPrev = () => setCurrentIndex((value) => Math.max(0, value - 1))
+  const goNext = () => setCurrentIndex((value) => Math.min(questions.length - 1, value + 1))
+
+  const stage = (
+    <section className="flex h-full min-h-0 flex-col overflow-hidden" aria-label="Pregunta de práctica">
+      <header className="stage-rail">
+        <div className="flex min-w-0 flex-1 items-center gap-[0.55rem] overflow-hidden">
+          <span className="stage-kicker">
+            Pregunta {currentIndex + 1} <span className="stage-kicker-sep">·</span> {questions.length}
+          </span>
+          <div className="inline-flex min-w-0 items-center gap-[0.4rem]">
+            <span className="chip chip-accent">{getSubjectLabel(currentQuestion.question.subjectId ?? 'sin_asignar')}</span>
+            <span
+              className="chip max-w-[clamp(8rem,28vw,22rem)] overflow-hidden text-ellipsis whitespace-nowrap"
+              title={getSubtopicLabel(currentQuestion.question.primarySubtopicId ?? 'sin_subtema')}
+            >
+              {getSubtopicLabel(currentQuestion.question.primarySubtopicId ?? 'sin_subtema')}
+            </span>
+          </div>
+        </div>
+
+        <div className="inline-flex shrink-0 items-center gap-2">
+          <span className="mr-[0.15rem] inline-flex items-baseline gap-[0.4rem] whitespace-nowrap" aria-live="polite">
+            <strong className="font-display text-[0.95rem] font-semibold tracking-[-0.03em] text-[var(--text-primary)]">
+              {answeredCount}
+              <span className="font-medium text-[var(--text-tertiary)]">/{questions.length}</span>
+            </strong>
+            <span className="text-[0.66rem] font-bold uppercase tracking-[0.1em] text-[var(--text-tertiary)] max-lg:hidden">
+              resueltas
+            </span>
+          </span>
+          <button
+            type="button"
+            disabled={completeMutation.isPending}
+            onClick={() => completeMutation.mutate()}
+            className="stage-finish"
+          >
+            {completeMutation.isPending ? 'Cerrando…' : 'Terminar'}
+          </button>
+        </div>
+      </header>
+
+      <nav className="stage-palette" aria-label="Mapa de preguntas">
+        {questions.map((question, index) => {
+          const attempt = question.attempt
+          const isCurrent = index === currentIndex
+          const status = attempt == null
+            ? 'pending'
+            : attempt.selectedOption === question.question.answerCorrectOption
+              ? 'correct'
+              : 'incorrect'
+          const stateClass = [
+            'palette-dot',
+            `is-${status}`,
+            isCurrent ? 'is-current' : '',
+          ].filter(Boolean).join(' ')
+          return (
+            <button
+              key={question.sessionQuestionId}
+              type="button"
+              className={stateClass}
+              onClick={() => setCurrentIndex(index)}
+              aria-label={`Ir a la pregunta ${index + 1}`}
+              aria-current={isCurrent ? 'true' : undefined}
+            >
+              <span className="palette-dot-index">{index + 1}</span>
+            </button>
+          )
+        })}
+      </nav>
+
+      <div className="relative flex min-h-0 flex-1">
+        <button
+          type="button"
+          onClick={goPrev}
+          disabled={isFirstQuestion}
+          className="stage-edge-nav stage-edge-nav-prev"
+          aria-label="Pregunta anterior"
+          title="Pregunta anterior (←)"
+        >
+          <ChevronLeft size={20} />
+        </button>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-pt-4">
+        <article className="stage-question">
+          <div className="stage-question-body">
+            <MarkdownBlock markdown={currentQuestion.question.bodyMarkdown} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-[0.65rem] lg:grid-cols-2">
+            {currentQuestion.question.options.map((option) => {
+              const isSelected = selectedOption === option.label
+              const isCorrect = hasAnswered && option.label === currentQuestion.question.answerCorrectOption
+              const isIncorrect = hasAnswered && isSelected && option.label !== currentQuestion.question.answerCorrectOption
+
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  disabled={hasAnswered || answerMutation.isPending || completeMutation.isPending}
+                  onClick={() => answerMutation.mutate(option.label)}
+                  className={[
+                    'option-card practice-option',
+                    isSelected ? 'is-selected' : '',
+                    isCorrect ? 'is-correct' : '',
+                    isIncorrect ? 'is-incorrect' : '',
+                  ].join(' ')}
+                >
+                  <span className="option-label">{option.label}</span>
+                  <span className="min-w-0 flex-1 text-left">
+                    <MarkdownBlock markdown={option.bodyMarkdown} />
+                    {isCorrect ? <span className="practice-option-meta is-correct">Respuesta correcta</span> : null}
+                    {isIncorrect ? <span className="practice-option-meta is-incorrect">Tu respuesta</span> : null}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {answerMutation.error ? (
+            <div className="stage-alert">
+              {answerMutation.error instanceof Error ? answerMutation.error.message : 'No se pudo guardar la respuesta.'}
+            </div>
+          ) : null}
+          {completeMutation.error ? (
+            <div className="stage-alert">
+              {completeMutation.error instanceof Error ? completeMutation.error.message : 'No se pudo completar la practica.'}
+            </div>
+          ) : null}
+
+          <p className="stage-shortcuts" aria-hidden>
+            <kbd>A</kbd><kbd>B</kbd><kbd>C</kbd><kbd>D</kbd>
+            <span>responder</span>
+            <span className="stage-shortcuts-sep">·</span>
+            <kbd>←</kbd><kbd>→</kbd>
+            <span>navegar</span>
+            <span className="stage-shortcuts-sep">·</span>
+            <kbd>⌘</kbd><kbd>K</kbd>
+            <span>tutor</span>
+          </p>
+        </article>
+        </div>
+
+        <button
+          type="button"
+          onClick={goNext}
+          disabled={isLastQuestion}
+          className="stage-edge-nav stage-edge-nav-next"
+          aria-label="Pregunta siguiente"
+          title="Pregunta siguiente (→)"
+        >
+          <ChevronRight size={20} />
+        </button>
+      </div>
+    </section>
+  )
+
+  const tutor = (
+    <aside className="tutor" aria-label="Tutor de práctica">
+      <header className="tutor-header">
+        <div className="inline-flex items-center gap-[0.6rem]">
+          <span className="tutor-avatar" aria-hidden>
+            <Bot size={15} />
+          </span>
+          <div className="flex flex-col leading-none">
+            <span className="tutor-title">Tutor</span>
+            <span className="tutor-subtitle">
+              <Sparkles size={10} /> nivel básico
+            </span>
+          </div>
+        </div>
+        <div className="inline-flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleClearTutorChat}
+            disabled={!canClearTutorChat}
+            title="Borrar conversación"
+            aria-label="Borrar conversación"
+            className="tutor-icon-btn"
+          >
+            <Trash2 size={14} />
+          </button>
+          {!isCompactViewport ? (
+            <button
+              type="button"
+              onClick={collapseTutor}
+              title="Ocultar tutor (⌘\\)"
+              aria-label="Ocultar tutor"
+              className="tutor-icon-btn"
+            >
+              <PanelRightClose size={14} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsTutorSheetOpen(false)}
+              aria-label="Cerrar"
+              className="tutor-icon-btn"
+            >
+              <PanelRightClose size={14} />
+            </button>
+          )}
+        </div>
+      </header>
+
+      <Conversation className="min-h-0 flex-1">
+        <ConversationContent className="gap-[0.85rem] px-[0.95rem] pt-4 pb-2">
+          {tutorMessages.length === 0 ? (
+            <ConversationEmptyState
+              className="items-stretch gap-[0.7rem] px-[1.1rem] pt-[1.6rem] pb-4 text-left"
+              icon={null}
+            >
+              <div className="tutor-empty-mark" aria-hidden>
+                <Bot size={20} />
+              </div>
+              <h3 className="tutor-empty-title">Pregunta lo que necesites.</h3>
+              <p className="tutor-empty-copy">
+                Puedo darte pistas, explicar el tema o sugerir estrategias —
+                sin revelar la respuesta antes de que lo intentes.
+              </p>
+              <div className="mt-[0.65rem] flex flex-col gap-[0.4rem]" role="group" aria-label="Sugerencias">
+                {QUICK_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    disabled={!canSendTutorMessage}
+                    onClick={() => sendTutorPrompt(prompt)}
+                    className="tutor-quick-prompt"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </ConversationEmptyState>
+          ) : (
+            tutorMessages.map((message) => (
+              <Message
+                key={message.id}
+                from={message.role}
+                className={
+                  message.role === 'assistant'
+                    ? 'flex flex-row items-start gap-[0.55rem]'
+                    : 'flex flex-row-reverse items-start gap-[0.55rem]'
+                }
+              >
+                {message.role === 'assistant' ? (
+                  <span className="tutor-msg-avatar" aria-hidden>
+                    <Bot size={12} />
+                  </span>
+                ) : null}
+                <MessageContent
+                  className={
+                    message.role === 'user'
+                      ? 'tutor-bubble tutor-bubble-user'
+                      : 'tutor-bubble tutor-bubble-assistant'
+                  }
+                >
+                  <MarkdownBlock markdown={message.content} />
+                </MessageContent>
+              </Message>
+            ))
+          )}
+          {isTutorThinking ? (
+            <Message from="assistant" className="flex flex-row items-start gap-[0.55rem]">
+              <span className="tutor-msg-avatar" aria-hidden>
+                <Bot size={12} />
+              </span>
+              <MessageContent className="tutor-bubble tutor-bubble-assistant">
+                <Shimmer className="text-sm">Pensando…</Shimmer>
+              </MessageContent>
+            </Message>
+          ) : null}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
+
+      <PromptInput
+        className="tutor-composer"
+        onSubmit={(message) => sendTutorPrompt(message.text)}
+      >
+        <PromptInputBody>
+          <PromptInputTextarea
+            data-tutor-input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Escribe un mensaje para el tutor…  (⌘K)"
+          />
+        </PromptInputBody>
+        <PromptInputFooter>
+          <span className="tutor-composer-hint">
+            <kbd>Enter</kbd> para enviar
+          </span>
+          <PromptInputSubmit
+            type="submit"
+            status={tutorMutation.isPending ? 'streaming' : 'ready'}
+            disabled={!canSendTutorMessage || draft.trim().length === 0}
+            aria-label="Enviar mensaje"
+          />
+        </PromptInputFooter>
+      </PromptInput>
+      {tutorThreadError ? (
+        <div className="tutor-alert">{tutorThreadError}</div>
+      ) : null}
+      {tutorMutation.error ? (
+        <div className="tutor-alert">
+          {tutorMutation.error instanceof Error ? tutorMutation.error.message : 'No se pudo enviar el mensaje al tutor.'}
+        </div>
+      ) : null}
+      {clearTutorMutation.error ? (
+        <div className="tutor-alert">
+          {clearTutorMutation.error instanceof Error ? clearTutorMutation.error.message : 'No se pudo borrar la conversación.'}
+        </div>
+      ) : null}
+    </aside>
+  )
+
+  const tutorRail = (
+    <button
+      type="button"
+      className="tutor-rail"
+      onClick={expandTutor}
+      aria-label="Mostrar tutor"
+      title="Mostrar tutor (⌘\\)"
+    >
+      <span className="tutor-rail-icon"><Bot size={16} /></span>
+      <span className="tutor-rail-label">Tutor</span>
+      <span className="tutor-rail-shortcut">⌘\</span>
+    </button>
+  )
+
   return (
     <StudentAppShell
       session={session}
       activeSection="practice"
       mainClassName="student-shell-main-immersive"
     >
-      <ResizablePanelGroup
-        orientation={practiceOrientation}
-        className="practice-workspace fade-in"
-      >
-        <ResizablePanel
-          defaultSize={50}
-          minSize={45}
-          className="practice-panel"
-        >
-          <section className="practice-stage card">
-            <div className="practice-stage-header">
-              <div className="practice-stage-meta">
-                <p className="practice-stage-kicker">Practica actual</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="chip chip-accent">{getSubjectLabel(currentQuestion.question.subjectId ?? 'sin_asignar')}</span>
-                  <span className="chip">{getSubtopicLabel(currentQuestion.question.primarySubtopicId ?? 'sin_subtema')}</span>
-                </div>
-              </div>
-
-              <div className="practice-stage-counter">
-                <span>Pregunta</span>
-                <strong>{currentIndex + 1} / {questions.length}</strong>
-              </div>
-            </div>
-
-            <div className="practice-progress-strip">
-              <div
-                className="practice-progress-value"
-                style={{ width: `${questions.length === 0 ? 0 : (answeredCount / questions.length) * 100}%` }}
-              />
-            </div>
-
-            <div className="practice-stage-body">
-              <div className="practice-question-card">
-                <div className="practice-question-copy">
-                  <MarkdownBlock markdown={currentQuestion.question.bodyMarkdown} />
-                </div>
-
-                <div className="practice-options-grid">
-                  {currentQuestion.question.options.map((option) => {
-                    const isSelected = selectedOption === option.label
-                    const isCorrect = hasAnswered && option.label === currentQuestion.question.answerCorrectOption
-                    const isIncorrect = hasAnswered && isSelected && option.label !== currentQuestion.question.answerCorrectOption
-
-                    return (
-                      <button
-                        key={option.label}
-                        type="button"
-                        disabled={hasAnswered || answerMutation.isPending || completeMutation.isPending}
-                        onClick={() => answerMutation.mutate(option.label)}
-                        className={[
-                          'option-card practice-option',
-                          isSelected ? 'is-selected' : '',
-                          isCorrect ? 'is-correct' : '',
-                          isIncorrect ? 'is-incorrect' : '',
-                        ].join(' ')}
-                      >
-                        <span className="option-label">{option.label}</span>
-                        <span className="min-w-0 flex-1 text-left">
-                          <MarkdownBlock markdown={option.bodyMarkdown} />
-                          {isCorrect ? <span className="practice-option-meta is-correct">Respuesta correcta</span> : null}
-                          {isIncorrect ? <span className="practice-option-meta is-incorrect">Tu respuesta</span> : null}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-
-              </div>
-            </div>
-
-            <div className="practice-stage-footer">
-              <div className="practice-footer-spacer" />
-
-              <div className="practice-footer-nav">
-                <button
-                  type="button"
-                  onClick={() => setCurrentIndex((value) => Math.max(0, value - 1))}
-                  disabled={currentIndex === 0}
-                  className="btn-ghost"
-                >
-                  <ChevronLeft size={18} />
-                  Anterior
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCurrentIndex((value) => Math.min(questions.length - 1, value + 1))}
-                  disabled={currentIndex === questions.length - 1}
-                  className="btn-primary"
-                >
-                  Siguiente
-                  <ChevronRight size={18} />
-                </button>
-
-                <button
-                  type="button"
-                  disabled={completeMutation.isPending}
-                  onClick={() => completeMutation.mutate()}
-                  className="btn-secondary"
-                >
-                  {completeMutation.isPending ? 'Cerrando...' : 'Terminar practica'}
-                </button>
-              </div>
-            </div>
-
-            {answerMutation.error ? (
-              <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--border-accent)] bg-[var(--accent-soft)] p-4 text-sm font-medium text-[var(--accent-text)]">
-                {answerMutation.error instanceof Error ? answerMutation.error.message : 'No se pudo guardar la respuesta.'}
-              </div>
-            ) : null}
-            {completeMutation.error ? (
-              <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--border-accent)] bg-[var(--accent-soft)] p-4 text-sm font-medium text-[var(--accent-text)]">
-                {completeMutation.error instanceof Error ? completeMutation.error.message : 'No se pudo completar la practica.'}
-              </div>
-            ) : null}
-          </section>
-        </ResizablePanel>
-
-        <ResizableHandle />
-
-        <ResizablePanel
-          defaultSize={50}
-          minSize={22}
-          className="practice-panel"
-        >
-          <aside className="practice-tutor card stagger-1">
-            <div className="practice-tutor-header practice-tutor-header-compact">
-              <div className="practice-panel-title-group practice-panel-title-group-inline">
-                <span className="practice-section-icon">
-                  <Bot size={18} />
-                </span>
-                <h2 className="practice-tutor-title">Tutor</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="practice-tutor-status">
-                  <Sparkles size={14} />
-                  Basico
-                </span>
-                <button
-                  type="button"
-                  onClick={handleClearTutorChat}
-                  disabled={!canClearTutorChat}
-                  title="Borrar conversación"
-                  aria-label="Borrar conversación"
-                  className="btn-ghost px-2 py-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-40"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-
-            <Conversation className="practice-thread practice-thread-compact rounded-none border-0 bg-transparent">
-              <ConversationContent className="gap-3 px-0 py-2">
-                {tutorMessages.length === 0 ? (
-                  <ConversationEmptyState
-                    className="gap-2 p-4"
-                    icon={
-                      <span className="practice-section-icon">
-                        <Bot size={18} />
-                      </span>
-                    }
-                    title="Pregunta lo que necesites"
-                    description="Puedo darte pistas, explicar un tema o sugerir estrategias. No revelare la respuesta antes de que intentes la pregunta."
-                  />
-                ) : (
-                  tutorMessages.map((message) => (
-                    <Message
-                      key={message.id}
-                      from={message.role}
-                      className={
-                        message.role === 'assistant'
-                          ? 'flex-row items-start gap-2'
-                          : undefined
-                      }
-                    >
-                      {message.role === 'assistant' ? (
-                        <span className="practice-avatar mt-1" aria-hidden>
-                          <Bot size={14} />
-                        </span>
-                      ) : null}
-                      <MessageContent
-                        className={
-                          message.role === 'user'
-                            ? 'group-[.is-user]:bg-[var(--accent-soft)] group-[.is-user]:border group-[.is-user]:border-[var(--border-accent)] group-[.is-user]:text-[var(--text-primary)]'
-                            : 'min-w-0 flex-1 text-[var(--text-primary)]'
-                        }
-                      >
-                        <MarkdownBlock markdown={message.content} />
-                      </MessageContent>
-                    </Message>
-                  ))
-                )}
-                {isTutorThinking ? (
-                  <Message from="assistant" className="flex-row items-center gap-2">
-                    <span className="practice-avatar" aria-hidden>
-                      <Bot size={14} />
-                    </span>
-                    <MessageContent className="min-w-0 flex-1 text-[var(--text-secondary)]">
-                      <Shimmer className="text-sm">Pensando...</Shimmer>
-                    </MessageContent>
-                  </Message>
-                ) : null}
-              </ConversationContent>
-              <ConversationScrollButton />
-            </Conversation>
-
-            <PromptInput
-              className="mt-auto px-4 pb-3"
-              onSubmit={(message) => sendTutorPrompt(message.text)}
+      <div className="practice-canvas fade-in">
+        {isCompactViewport ? (
+          <>
+            {stage}
+            <button
+              type="button"
+              className={`tutor-fab ${isTutorSheetOpen ? 'is-open' : ''}`}
+              onClick={() => setIsTutorSheetOpen((value) => !value)}
+              aria-label={isTutorSheetOpen ? 'Cerrar tutor' : 'Abrir tutor'}
             >
-              <PromptInputBody>
-                <PromptInputTextarea
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Escribe un mensaje para el tutor..."
-                />
-              </PromptInputBody>
-              <PromptInputFooter>
-                <PromptInputSubmit
-                  type="submit"
-                  status={tutorMutation.isPending ? 'streaming' : 'ready'}
-                  disabled={!canSendTutorMessage || draft.trim().length === 0}
-                  aria-label="Enviar mensaje"
-                />
-              </PromptInputFooter>
-            </PromptInput>
-            {tutorThreadError ? (
-              <div className="px-4 pb-2 text-sm font-medium text-[var(--accent-text)]">
-                {tutorThreadError}
-              </div>
-            ) : null}
-            {tutorMutation.error ? (
-              <div className="px-4 pb-4 text-sm font-medium text-[var(--accent-text)]">
-                {tutorMutation.error instanceof Error ? tutorMutation.error.message : 'No se pudo enviar el mensaje al tutor.'}
-              </div>
-            ) : null}
-            {clearTutorMutation.error ? (
-              <div className="px-4 pb-4 text-sm font-medium text-[var(--accent-text)]">
-                {clearTutorMutation.error instanceof Error ? clearTutorMutation.error.message : 'No se pudo borrar la conversación.'}
-              </div>
-            ) : null}
-          </aside>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+              <Bot size={18} />
+              <span>Tutor</span>
+            </button>
+            <div
+              className={`absolute inset-0 z-40 flex-col ${isTutorSheetOpen ? 'flex' : 'hidden'}`}
+            >
+              <button
+                type="button"
+                className="tutor-sheet-backdrop"
+                onClick={() => setIsTutorSheetOpen(false)}
+                aria-label="Cerrar tutor"
+              />
+              <div className="tutor-sheet-panel">{tutor}</div>
+            </div>
+          </>
+        ) : (
+          <>
+            <ResizablePanelGroup
+              orientation={practiceOrientation}
+              defaultLayout={storedLayoutRef.current}
+              onLayoutChanged={(layout) => {
+                if (typeof window === 'undefined') return
+                try {
+                  window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout))
+                } catch {
+                  // ignore
+                }
+              }}
+              className={`practice-workspace h-full min-h-0 flex-1 ${practiceOrientation === 'vertical' ? 'is-vertical' : 'is-horizontal'}`}
+            >
+              <ResizablePanel
+                id={STAGE_PANEL_ID}
+                defaultSize={isTutorCollapsed ? 100 : 62}
+                minSize={42}
+                className="relative h-full min-h-0"
+              >
+                {stage}
+              </ResizablePanel>
+              {!isTutorCollapsed ? (
+                <>
+                  <ResizableHandle />
+                  <ResizablePanel
+                    id={TUTOR_PANEL_ID}
+                    defaultSize={38}
+                    minSize={26}
+                    className="relative h-full min-h-0"
+                  >
+                    {tutor}
+                  </ResizablePanel>
+                </>
+              ) : null}
+            </ResizablePanelGroup>
+            {isTutorCollapsed ? tutorRail : null}
+          </>
+        )}
+      </div>
     </StudentAppShell>
   )
 }
