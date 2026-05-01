@@ -17,7 +17,8 @@
     "@aprendo/ingest": "workspace:*",
     "@convex-dev/agent": "^0.6.1",
     "ai": "^6.0.168",
-    "convex": "^1.33.0"
+    "convex": "^1.33.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@convex-dev/eslint-plugin": "^1.1.1",

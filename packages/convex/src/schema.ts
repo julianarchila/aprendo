@@ -101,6 +101,19 @@ export default defineSchema(
     })
       .index('by_practiceSessionId', ['practiceSessionId'])
       .index('by_studentId', ['studentId']),
+    practiceTutorArtifacts: defineTable({
+      threadId: v.string(),
+      messageId: v.string(),
+      practiceSessionId: v.id('sessions'),
+      studentId: v.id('students'),
+      title: v.string(),
+      description: v.optional(v.string()),
+      htmlBody: v.string(),
+      createdAt: v.number(),
+    })
+      .index('by_threadId', ['threadId'])
+      .index('by_messageId', ['messageId'])
+      .index('by_practiceSessionId', ['practiceSessionId']),
   },
   { schemaValidation: true },
 )

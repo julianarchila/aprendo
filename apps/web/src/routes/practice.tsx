@@ -8,12 +8,22 @@ import {
   ChevronRight,
   PanelRightClose,
   Sparkles,
+  SquarePlay,
   Trash2,
 } from 'lucide-react'
 import { extractText } from '@convex-dev/agent'
 import { useThreadMessages } from '@convex-dev/agent/react'
 import { api } from '@aprendo/convex/api'
+import type { Id } from '@aprendo/convex/dataModel'
 import { useAction } from 'convex/react'
+import { ArtifactPane } from '../components/ArtifactPane.tsx'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog.tsx'
 import MarkdownBlock from '../components/MarkdownBlock.tsx'
 import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from '../components/ai-elements/conversation.tsx'
 import { Message, MessageContent } from '../components/ai-elements/message.tsx'
@@ -31,17 +41,26 @@ import { getSubjectLabel, getSubtopicLabel } from '../lib/taxonomy.ts'
 
 type ChatRole = 'assistant' | 'user'
 
+type ArtifactRef = {
+  artifactId: Id<'practiceTutorArtifacts'>
+  title: string
+  description?: string
+}
+
 type ChatMessage = {
   id: string
   role: ChatRole
   content: string
   streaming?: boolean
+  artifactRef?: ArtifactRef
+  artifactPending?: boolean
 }
 
 const TUTOR_COLLAPSED_STORAGE_KEY = 'aprendo:practice:tutor-collapsed'
 const LAYOUT_STORAGE_KEY = 'aprendo:practice:workspace-layout-v2'
 const STAGE_PANEL_ID = 'aprendo-practice-stage'
 const TUTOR_PANEL_ID = 'aprendo-practice-tutor'
+const ARTIFACT_PANEL_ID = 'aprendo-practice-artifact'
 const QUICK_PROMPTS = [
   'Dame una pista para esta pregunta',
   'Explícame el tema relacionado',
@@ -91,8 +110,10 @@ function PracticePage() {
   const [draft, setDraft] = useState('')
   const [practiceOrientation, setPracticeOrientation] = useState<'horizontal' | 'vertical'>('horizontal')
   const [isCompactViewport, setIsCompactViewport] = useState(false)
+  const [isWideViewport, setIsWideViewport] = useState(false)
   const [isTutorSheetOpen, setIsTutorSheetOpen] = useState(false)
   const [isTutorCollapsed, setIsTutorCollapsed] = useState(false)
+  const [openArtifactId, setOpenArtifactId] = useState<Id<'practiceTutorArtifacts'> | null>(null)
   const questionStartedAtRef = useRef<number>(Date.now())
   const storedLayoutRef = useRef<{ [id: string]: number } | undefined>(undefined)
   if (storedLayoutRef.current === undefined && typeof window !== 'undefined') {
@@ -222,18 +243,22 @@ function PracticePage() {
 
     const compactMedia = window.matchMedia('(max-width: 1024px)')
     const tabletMedia = window.matchMedia('(max-width: 1200px)')
+    const wideMedia = window.matchMedia('(min-width: 1200px)')
     const sync = () => {
       setIsCompactViewport(compactMedia.matches)
       setPracticeOrientation(tabletMedia.matches ? 'vertical' : 'horizontal')
+      setIsWideViewport(wideMedia.matches)
     }
 
     sync()
     compactMedia.addEventListener('change', sync)
     tabletMedia.addEventListener('change', sync)
+    wideMedia.addEventListener('change', sync)
 
     return () => {
       compactMedia.removeEventListener('change', sync)
       tabletMedia.removeEventListener('change', sync)
+      wideMedia.removeEventListener('change', sync)
     }
   }, [])
 
@@ -401,18 +426,85 @@ function PracticePage() {
   }, [answerMutation, currentIndex, focusTutorInput, questions, toggleTutor])
 
   const tutorMessages: ChatMessage[] = useMemo(() => {
-    return tutorMessagesResult.results.flatMap((message) => {
-      if (message.message == null) return []
-      if (message.message.role !== 'user' && message.message.role !== 'assistant') return []
+    // First pass: collect tool-result outputs keyed by toolCallId so we can
+    // attach the resulting artifactId/title/description back onto the
+    // assistant message that called the tool.
+    const artifactByToolCallId = new Map<string, ArtifactRef>()
+    for (const message of tutorMessagesResult.results) {
+      const inner = message.message
+      if (inner == null || inner.role !== 'tool') continue
+      const content = inner.content
+      if (!Array.isArray(content)) continue
+      for (const part of content) {
+        if (
+          part != null
+          && typeof part === 'object'
+          && 'type' in part
+          && part.type === 'tool-result'
+          && 'toolName' in part
+          && part.toolName === 'create_artifact'
+        ) {
+          const output = (part as { output?: { type?: string; value?: unknown } }).output
+          if (output != null && output.type === 'json' && output.value != null && typeof output.value === 'object') {
+            const value = output.value as {
+              artifactId?: string
+              title?: string
+              description?: string
+            }
+            if (typeof value.artifactId === 'string' && typeof value.title === 'string') {
+              artifactByToolCallId.set((part as { toolCallId: string }).toolCallId, {
+                artifactId: value.artifactId as Id<'practiceTutorArtifacts'>,
+                title: value.title,
+                description: value.description,
+              })
+            }
+          }
+        }
+      }
+    }
 
-      const content = extractText(message.message)?.trim() ?? ''
-      if (content.length === 0) return []
+    return tutorMessagesResult.results.flatMap((message) => {
+      const inner = message.message
+      if (inner == null) return []
+      if (inner.role !== 'user' && inner.role !== 'assistant') return []
+
+      // Detect a create_artifact tool-call part on the assistant message and
+      // attach the matching artifactRef (if the tool result has arrived) or
+      // mark the message as pending the artifact.
+      let artifactRef: ArtifactRef | undefined
+      let artifactPending = false
+      if (inner.role === 'assistant' && Array.isArray(inner.content)) {
+        for (const part of inner.content) {
+          if (
+            part != null
+            && typeof part === 'object'
+            && 'type' in part
+            && part.type === 'tool-call'
+            && 'toolName' in part
+            && part.toolName === 'create_artifact'
+          ) {
+            const toolCallId = (part as { toolCallId: string }).toolCallId
+            const ref = artifactByToolCallId.get(toolCallId)
+            if (ref != null) {
+              artifactRef = ref
+            } else {
+              artifactPending = true
+            }
+            break
+          }
+        }
+      }
+
+      const content = extractText(inner)?.trim() ?? ''
+      if (content.length === 0 && artifactRef == null && !artifactPending) return []
 
       return [{
         id: message.key,
-        role: message.message.role as ChatRole,
+        role: inner.role as ChatRole,
         content,
         streaming: message.streaming === true,
+        artifactRef,
+        artifactPending,
       }]
     })
   }, [tutorMessagesResult.results])
@@ -779,7 +871,31 @@ function PracticePage() {
                       : 'tutor-bubble tutor-bubble-assistant'
                   }
                 >
-                  <MarkdownBlock markdown={message.content} />
+                  {message.content.length > 0 ? (
+                    <MarkdownBlock markdown={message.content} />
+                  ) : null}
+                  {message.role === 'assistant' && message.artifactRef != null ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ref = message.artifactRef
+                        if (ref == null) return
+                        setOpenArtifactId(ref.artifactId)
+                        if (!isWideViewport) {
+                          setIsTutorSheetOpen(false)
+                        }
+                      }}
+                      className="tutor-artifact-cta"
+                    >
+                      <SquarePlay size={14} aria-hidden />
+                      <span>Ver demostración interactiva</span>
+                    </button>
+                  ) : null}
+                  {message.role === 'assistant' && message.artifactPending && message.artifactRef == null ? (
+                    <Shimmer className="tutor-artifact-pending text-xs">
+                      Preparando demostración…
+                    </Shimmer>
+                  ) : null}
                 </MessageContent>
               </Message>
             ))
@@ -900,8 +1016,8 @@ function PracticePage() {
             >
               <ResizablePanel
                 id={STAGE_PANEL_ID}
-                defaultSize={isTutorCollapsed ? 100 : 62}
-                minSize={42}
+                defaultSize={isTutorCollapsed && openArtifactId == null ? 100 : openArtifactId != null && isWideViewport ? 38 : 62}
+                minSize={32}
                 className="relative h-full min-h-0"
               >
                 {stage}
@@ -911,11 +1027,28 @@ function PracticePage() {
                   <ResizableHandle />
                   <ResizablePanel
                     id={TUTOR_PANEL_ID}
-                    defaultSize={38}
-                    minSize={26}
+                    defaultSize={openArtifactId != null && isWideViewport ? 30 : 38}
+                    minSize={22}
                     className="relative h-full min-h-0"
                   >
                     {tutor}
+                  </ResizablePanel>
+                </>
+              ) : null}
+              {openArtifactId != null && isWideViewport && studentId != null ? (
+                <>
+                  <ResizableHandle />
+                  <ResizablePanel
+                    id={ARTIFACT_PANEL_ID}
+                    defaultSize={32}
+                    minSize={22}
+                    className="relative h-full min-h-0"
+                  >
+                    <ArtifactPane
+                      artifactId={openArtifactId}
+                      studentId={studentId as Id<'students'>}
+                      onClose={() => setOpenArtifactId(null)}
+                    />
                   </ResizablePanel>
                 </>
               ) : null}
@@ -923,6 +1056,31 @@ function PracticePage() {
             {isTutorCollapsed ? tutorRail : null}
           </>
         )}
+        {openArtifactId != null && (!isWideViewport || isCompactViewport) && studentId != null ? (
+          <Dialog
+            open
+            onOpenChange={(open) => {
+              if (!open) setOpenArtifactId(null)
+            }}
+          >
+            <DialogContent
+              className="flex h-[85vh] max-h-[85vh] w-[min(960px,calc(100vw-2rem))] max-w-[min(960px,calc(100vw-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(960px,calc(100vw-2rem))]"
+              showCloseButton={false}
+            >
+              <DialogHeader className="sr-only">
+                <DialogTitle>Demostración interactiva</DialogTitle>
+                <DialogDescription>
+                  Demostración interactiva creada por el tutor.
+                </DialogDescription>
+              </DialogHeader>
+              <ArtifactPane
+                artifactId={openArtifactId}
+                studentId={studentId as Id<'students'>}
+                onClose={() => setOpenArtifactId(null)}
+              />
+            </DialogContent>
+          </Dialog>
+        ) : null}
       </div>
     </StudentAppShell>
   )

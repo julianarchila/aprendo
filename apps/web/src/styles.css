@@ -1271,6 +1271,40 @@ pre code {
   cursor: not-allowed;
 }
 
+/* Inline CTA button shown on assistant messages that contain an artifact. */
+.tutor-artifact-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 0.55rem;
+  border: 1px solid var(--border-accent, #2563eb);
+  background: color-mix(in srgb, var(--accent, #2563eb) 8%, transparent);
+  color: var(--accent-text, #2563eb);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.tutor-artifact-cta:hover {
+  background: color-mix(in srgb, var(--accent, #2563eb) 14%, transparent);
+  transform: translateX(1px);
+}
+
+.tutor-artifact-cta:focus-visible {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: 2px;
+}
+
+.tutor-artifact-pending {
+  display: inline-flex;
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+  color: var(--text-tertiary, #6b7280);
+}
+
 /* Composer */
 .tutor-composer {
   margin: 0;
