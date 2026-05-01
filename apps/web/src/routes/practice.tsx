@@ -381,7 +381,7 @@ function PracticePage() {
         className="practice-workspace fade-in"
       >
         <ResizablePanel
-          defaultSize={practiceOrientation === 'horizontal' ? 67 : 62}
+          defaultSize={50}
           minSize={45}
           className="practice-panel"
         >
@@ -498,7 +498,7 @@ function PracticePage() {
         <ResizableHandle />
 
         <ResizablePanel
-          defaultSize={practiceOrientation === 'horizontal' ? 33 : 38}
+          defaultSize={50}
           minSize={22}
           className="practice-panel"
         >

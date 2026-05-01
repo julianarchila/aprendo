@@ -550,7 +550,7 @@ pre code {
   align-items: center;
   gap: 1rem;
   width: min(1320px, calc(100% - 2rem));
-  min-height: 4.1rem;
+  min-height: 3.25rem;
   margin-inline: auto;
 }
 
@@ -597,7 +597,7 @@ pre code {
   justify-self: center;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.3rem;
+  padding: 0.2rem;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg-card) 80%, var(--bg) 20%);
@@ -609,8 +609,8 @@ pre code {
   align-items: center;
   justify-content: center;
   min-width: 6.4rem;
-  min-height: 2.2rem;
-  padding: 0.35rem 0.8rem;
+  min-height: 1.85rem;
+  padding: 0.25rem 0.8rem;
   border-radius: var(--radius-pill);
   color: var(--text-secondary);
   text-decoration: none;
@@ -643,8 +643,8 @@ pre code {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
-  min-height: 2.35rem;
-  padding: 0.45rem 0.8rem;
+  min-height: 2rem;
+  padding: 0.3rem 0.75rem;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg-card) 82%, var(--bg) 18%);
@@ -1073,7 +1073,7 @@ pre code {
   .student-topbar-inner {
     grid-template-columns: 1fr;
     justify-items: stretch;
-    padding: 0.85rem 0;
+    padding: 0.5rem 0;
   }
 
   .student-topnav {
