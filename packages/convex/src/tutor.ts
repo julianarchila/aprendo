@@ -1,5 +1,5 @@
 import { Agent, createTool, extractText, listMessages, syncStreams, vStreamArgs, vStreamMessagesReturnValue } from '@convex-dev/agent'
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
+import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 import { stepCountIs } from 'ai'
 import { z } from 'zod'
 import { internal } from './_generated/api'
@@ -12,8 +12,8 @@ import taxonomyContract from '../../../docs/taxonomy.v1.json'
 
 const agentComponent = (components as Record<string, unknown>).agent as ConstructorParameters<typeof Agent>[0]
 
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GEMINI_API_KEY,
+const openrouter = createOpenRouter({
+  apiKey: process.env.OPENROUTER_API_KEY,
 })
 
 const BASE_TUTOR_INSTRUCTIONS = [
@@ -144,7 +144,7 @@ const createArtifactTool = createTool({
 
 const tutorAgent = new Agent(agentComponent, {
   name: 'Tutor',
-  languageModel: google('gemini-2.5-flash'),
+  languageModel: openrouter('deepseek/deepseek-v4-pro'),
   instructions: [
     BASE_TUTOR_INSTRUCTIONS,
     'Si no recibes contexto sobre la pregunta actual, dilo claramente y pide la información necesaria.',
