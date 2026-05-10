@@ -1,70 +1,24 @@
-import { startTransition, useEffect, useState } from 'react'
+import { convexQuery } from '@convex-dev/react-query'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@aprendo/convex/api'
+import type { Id } from '@aprendo/convex/dataModel'
 
-const STORAGE_KEY = 'aprendo.student-session'
-
-export interface StoredStudentSession {
-  studentId: string
+export interface ActiveStudentSession {
+  studentId: Id<'students'>
   email: string
 }
 
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0
-}
+export function useCurrentStudent() {
+  const result = useQuery(convexQuery(api.auth.getCurrentStudent, {}))
 
-function readStoredStudentSession() {
-  if (typeof window === 'undefined') return null
-
-  const rawValue = window.localStorage.getItem(STORAGE_KEY)
-  if (rawValue == null) return null
-
-  try {
-    const parsed = JSON.parse(rawValue) as StoredStudentSession
-    if (!isNonEmptyString(parsed.studentId) || !isNonEmptyString(parsed.email)) {
-      window.localStorage.removeItem(STORAGE_KEY)
-      return null
-    }
-    return parsed
-  } catch {
-    window.localStorage.removeItem(STORAGE_KEY)
-    return null
-  }
-}
-
-export function persistStudentSession(session: StoredStudentSession) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
-}
-
-export function clearStoredStudentSession() {
-  if (typeof window === 'undefined') return
-  window.localStorage.removeItem(STORAGE_KEY)
-}
-
-export function useStoredStudentSession() {
-  const [session, setSession] = useState<StoredStudentSession | null>(null)
-  const [isReady, setIsReady] = useState(false)
-
-  useEffect(() => {
-    startTransition(() => {
-      setSession(readStoredStudentSession())
-      setIsReady(true)
-    })
-  }, [])
+  const session: ActiveStudentSession | null =
+    result.data == null
+      ? null
+      : { studentId: result.data._id, email: result.data.email }
 
   return {
     session,
-    isReady,
-    saveSession(nextSession: StoredStudentSession) {
-      persistStudentSession(nextSession)
-      startTransition(() => {
-        setSession(nextSession)
-      })
-    },
-    clearSession() {
-      clearStoredStudentSession()
-      startTransition(() => {
-        setSession(null)
-      })
-    },
+    isReady: !result.isPending,
+    isLoading: result.isPending,
   }
 }

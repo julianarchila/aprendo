@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { useStoredStudentSession } from '../lib/student-session.ts'
+import { useCurrentStudent } from '../lib/student-session.ts'
 import ThemeToggle from '../components/ThemeToggle.tsx'
 
 export const Route = createFileRoute('/')({
@@ -7,7 +7,7 @@ export const Route = createFileRoute('/')({
 })
 
 function LandingPage() {
-  const { session, isReady } = useStoredStudentSession()
+  const { session, isReady } = useCurrentStudent()
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--bg)]">

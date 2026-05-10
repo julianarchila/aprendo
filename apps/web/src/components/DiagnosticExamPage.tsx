@@ -6,9 +6,9 @@ import { api } from '@aprendo/convex/api'
 import MarkdownBlock from './MarkdownBlock.tsx'
 import { diagnosticSessionQuery } from '../lib/student-queries.ts'
 import { getSubjectLabel } from '../lib/taxonomy.ts'
-import type { StoredStudentSession } from '../lib/student-session.ts'
+import type { ActiveStudentSession } from '../lib/student-session.ts'
 
-export function DiagnosticExamPage({ session }: { session: StoredStudentSession }) {
+export function DiagnosticExamPage({ session }: { session: ActiveStudentSession }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [diagnosticSessionId, setDiagnosticSessionId] = useState<string | null>(null)

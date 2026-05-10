@@ -5,7 +5,6 @@ import {
 } from '@tanstack/react-query'
 import { createRouter as createTanStackRouter } from '@tanstack/react-router'
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query'
-import { ConvexProvider } from 'convex/react'
 import { routeTree } from './routeTree.gen'
 
 export function getRouter() {
@@ -18,7 +17,9 @@ export function getRouter() {
     throw new Error('Missing VITE_CONVEX_URL in apps/web/.env.local')
   }
 
-  const convexQueryClient = new ConvexQueryClient(convexUrl)
+  const convexQueryClient = new ConvexQueryClient(convexUrl, {
+    expectAuth: true,
+  })
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -31,12 +32,7 @@ export function getRouter() {
 
   const router = createTanStackRouter({
     routeTree,
-    context: { queryClient },
-    Wrap: ({ children }) => (
-      <ConvexProvider client={convexQueryClient.convexClient}>
-        {children}
-      </ConvexProvider>
-    ),
+    context: { queryClient, convexQueryClient },
     scrollRestoration: true,
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,

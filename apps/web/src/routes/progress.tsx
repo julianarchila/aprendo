@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { StudentAppShell } from '../components/StudentAppShell.tsx'
 import { StudentProgressPage } from '../components/StudentProgressPage.tsx'
 import { studentAppStateQuery } from '../lib/student-queries.ts'
-import { useStoredStudentSession } from '../lib/student-session.ts'
+import { useCurrentStudent } from '../lib/student-session.ts'
 
 export const Route = createFileRoute('/progress')({
   component: ProgressRoutePage,
@@ -12,7 +12,7 @@ export const Route = createFileRoute('/progress')({
 
 function ProgressRoutePage() {
   const navigate = useNavigate()
-  const { session, isReady } = useStoredStudentSession()
+  const { session, isReady } = useCurrentStudent()
   const appStateQuery = useQuery({
     ...studentAppStateQuery(session?.studentId),
     enabled: isReady && session != null,

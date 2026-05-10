@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { DiagnosticExamPage } from '../components/DiagnosticExamPage.tsx'
 import ThemeToggle from '../components/ThemeToggle.tsx'
 import { studentAppStateQuery } from '../lib/student-queries.ts'
-import { useStoredStudentSession } from '../lib/student-session.ts'
+import { useCurrentStudent } from '../lib/student-session.ts'
 
 export const Route = createFileRoute('/diagnostic')({
   component: DiagnosticPage,
@@ -12,7 +12,7 @@ export const Route = createFileRoute('/diagnostic')({
 
 function DiagnosticPage() {
   const navigate = useNavigate()
-  const { session, isReady } = useStoredStudentSession()
+  const { session, isReady } = useCurrentStudent()
   const appStateQuery = useQuery({
     ...studentAppStateQuery(session?.studentId),
     enabled: isReady && session != null,

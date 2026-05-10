@@ -17,6 +17,9 @@ const config = defineConfig({
     viteReact(),
     nitro()
   ],
+  ssr: {
+    noExternal: ['@convex-dev/better-auth'],
+  },
 })
 
 export default config

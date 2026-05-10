@@ -1,6 +1,8 @@
 import { Link, useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
 import ThemeToggle from './ThemeToggle.tsx'
-import { type StoredStudentSession, useStoredStudentSession } from '../lib/student-session.ts'
+import { authClient } from '../lib/auth-client.ts'
+import type { ActiveStudentSession } from '../lib/student-session.ts'
 
 type StudentSection = 'practice' | 'progress'
 
@@ -11,14 +13,27 @@ export function StudentAppShell({
   mainClassName,
   children,
 }: {
-  session: StoredStudentSession
+  session: ActiveStudentSession
   activeSection: StudentSection
   topBarSupplement?: React.ReactNode
   mainClassName?: string
   children: React.ReactNode
 }) {
   const navigate = useNavigate()
-  const { clearSession } = useStoredStudentSession()
+  const [isSigningOut, setIsSigningOut] = useState(false)
+  const handleSignOut = async () => {
+    if (isSigningOut) return
+    setIsSigningOut(true)
+    try {
+      await authClient.signOut()
+    } finally {
+      if (typeof window !== 'undefined') {
+        window.location.assign('/')
+      } else {
+        await navigate({ to: '/' })
+      }
+    }
+  }
 
   return (
     <div className="student-shell">
@@ -65,13 +80,11 @@ export function StudentAppShell({
             <ThemeToggle />
             <button
               type="button"
-              onClick={() => {
-                clearSession()
-                void navigate({ to: '/' })
-              }}
+              disabled={isSigningOut}
+              onClick={() => { void handleSignOut() }}
               className="btn-ghost text-xs"
             >
-              Salir
+              {isSigningOut ? 'Saliendo...' : 'Salir'}
             </button>
           </div>
         </div>

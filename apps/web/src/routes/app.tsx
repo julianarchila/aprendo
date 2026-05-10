@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { studentAppStateQuery } from '../lib/student-queries.ts'
-import { useStoredStudentSession } from '../lib/student-session.ts'
+import { useCurrentStudent } from '../lib/student-session.ts'
 
 export const Route = createFileRoute('/app')({
   component: AppEntryPage,
@@ -10,7 +10,7 @@ export const Route = createFileRoute('/app')({
 
 function AppEntryPage() {
   const navigate = useNavigate()
-  const { session, isReady } = useStoredStudentSession()
+  const { session, isReady } = useCurrentStudent()
   const appStateQuery = useQuery({
     ...studentAppStateQuery(session?.studentId),
     enabled: isReady && session != null,

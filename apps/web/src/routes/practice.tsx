@@ -36,7 +36,7 @@ import {
   ResizablePanelGroup,
 } from '../components/ui/resizable.tsx'
 import { practiceSessionQuery, practiceTutorThreadQuery, studentAppStateQuery } from '../lib/student-queries.ts'
-import { useStoredStudentSession } from '../lib/student-session.ts'
+import { useCurrentStudent } from '../lib/student-session.ts'
 import { getSubjectLabel, getSubtopicLabel } from '../lib/taxonomy.ts'
 
 type ChatRole = 'assistant' | 'user'
@@ -87,7 +87,7 @@ export const Route = createFileRoute('/practice')({
 function PracticePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { session, isReady } = useStoredStudentSession()
+  const { session, isReady } = useCurrentStudent()
   const studentId = session?.studentId ?? null
   const appStateQuery = useQuery({
     ...studentAppStateQuery(session?.studentId),
