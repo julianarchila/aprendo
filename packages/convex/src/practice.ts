@@ -229,6 +229,26 @@ export const getActivePracticeSession = query({
   },
 })
 
+export const listStudentPracticeSessions = query({
+  args: {
+    studentId: v.id('students'),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 6
+    const sessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_studentId_type', (q) =>
+        q.eq('studentId', args.studentId).eq('type', 'practice'),
+      )
+      .collect()
+
+    return sessions
+      .sort((a, b) => b.startedAt - a.startedAt)
+      .slice(0, limit)
+  },
+})
+
 export const getPracticeSession = query({
   args: {
     sessionId: v.id('sessions'),

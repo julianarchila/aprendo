@@ -604,15 +604,7 @@ function PracticePage() {
               resueltas
             </span>
           </span>
-          {isReviewMode ? (
-            <button
-              type="button"
-              onClick={() => navigate({ to: '/progress' })}
-              className="stage-finish"
-            >
-              Progreso
-            </button>
-          ) : (
+          {!isReviewMode ? (
             <button
               type="button"
               disabled={!canFinishPractice || completeMutation.isPending}
@@ -622,7 +614,7 @@ function PracticePage() {
             >
               {completeMutation.isPending ? 'Cerrando...' : 'Terminar'}
             </button>
-          )}
+          ) : null}
         </div>
       </header>
 

@@ -65,6 +65,17 @@ export function activePracticeSessionQuery(studentId: string | null | undefined)
   })
 }
 
+export function studentPracticeSessionsQuery(studentId: string | null | undefined) {
+  if (!hasValue(studentId)) {
+    return convexQuery(api.practice.listStudentPracticeSessions, 'skip')
+  }
+
+  return convexQuery(api.practice.listStudentPracticeSessions, {
+    studentId: studentId as never,
+    limit: 6,
+  })
+}
+
 export function practiceTutorThreadQuery(
   practiceSessionId: string | null | undefined,
   studentId: string | null | undefined,

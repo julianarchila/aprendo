@@ -8,10 +8,7 @@ const math = createMathPlugin({
 
 export default function MarkdownBlock({ markdown }: { markdown: string }) {
   return (
-    <Streamdown
-      className="markdown-body"
-      plugins={{ math }}
-    >
+    <Streamdown className="markdown-body" plugins={{ math }}>
       {markdown}
     </Streamdown>
   )

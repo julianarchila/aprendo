@@ -21,6 +21,22 @@ function formatElapsed(ms: number) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
+function ElapsedTimer({ startedAt }: { startedAt: number }) {
+  const [elapsedMs, setElapsedMs] = useState(() => Date.now() - startedAt)
+  useEffect(() => {
+    const sync = () => setElapsedMs(Date.now() - startedAt)
+    sync()
+    const id = window.setInterval(sync, 1000)
+    return () => window.clearInterval(id)
+  }, [startedAt])
+  return (
+    <span className="practice-solve-timer">
+      <Timer size={17} />
+      {formatElapsed(elapsedMs)}
+    </span>
+  )
+}
+
 function PracticeSolvePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -40,7 +56,6 @@ function PracticeSolvePage() {
   const clearPracticeAnswer = useConvexMutation(api.practice.clearPracticeAnswer)
   const completePracticeSession = useConvexMutation(api.practice.completePracticeSession)
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [elapsedMs, setElapsedMs] = useState(0)
   const questionStartedAtRef = useRef(Date.now())
 
   useEffect(() => {
@@ -59,15 +74,6 @@ function PracticeSolvePage() {
   }, [appStateQuery.data, isReady, isReviewRoute, navigate, session])
 
   useEffect(() => {
-    const startedAt = practiceQuery.data?.session.startedAt
-    if (startedAt == null) return
-    const sync = () => setElapsedMs(Date.now() - startedAt)
-    sync()
-    const id = window.setInterval(sync, 1000)
-    return () => window.clearInterval(id)
-  }, [practiceQuery.data?.session.startedAt])
-
-  useEffect(() => {
     questionStartedAtRef.current = Date.now()
   }, [currentIndex])
 
@@ -78,10 +84,6 @@ function PracticeSolvePage() {
       void navigate({ to: '/practice/$sessionId/review', params: { sessionId } })
     }
   }, [isReviewRoute, navigate, practiceQuery.data, sessionId])
-
-  if (isReviewRoute) {
-    return <Outlet />
-  }
 
   const answerMutation = useMutation({
     mutationFn: async (selectedOption: string) => {
@@ -135,6 +137,10 @@ function PracticeSolvePage() {
     },
   })
 
+  if (isReviewRoute) {
+    return <Outlet />
+  }
+
   if (!isReady || session == null || appStateQuery.isPending || practiceQuery.isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
@@ -172,7 +178,6 @@ function PracticeSolvePage() {
   const answeredCount = questions.filter((question) => question.attempt?.selectedOption != null).length
   const selectedOption = currentQuestion.attempt?.selectedOption ?? null
   const isSavingAnswer = answerMutation.isPending || clearAnswerMutation.isPending
-  const canFinish = answeredCount === questions.length
   const progress = questions.length === 0 ? 0 : (answeredCount / questions.length) * 100
 
   return (
@@ -195,10 +200,7 @@ function PracticeSolvePage() {
             </div>
           </div>
           <div className="practice-solve-actions">
-            <span className="practice-solve-timer">
-              <Timer size={17} />
-              {formatElapsed(elapsedMs)}
-            </span>
+            <ElapsedTimer startedAt={practice.session.startedAt} />
             <button
               type="button"
               className="practice-solve-icon"
@@ -237,7 +239,6 @@ function PracticeSolvePage() {
                   <span className="min-w-0 flex-1 text-left">
                     <MarkdownBlock markdown={option.bodyMarkdown} />
                   </span>
-                  <span className="practice-solve-option-radio" aria-hidden />
                 </button>
               )
             })}
@@ -285,9 +286,9 @@ function PracticeSolvePage() {
             <button
               type="button"
               className="btn-primary inline-flex items-center gap-2"
-              disabled={!canFinish || completeMutation.isPending}
+              disabled={completeMutation.isPending}
               onClick={() => completeMutation.mutate()}
-              title={canFinish ? 'Terminar práctica' : 'Responde todas las preguntas para terminar'}
+              title="Terminar práctica"
             >
               {completeMutation.isPending ? 'Terminando...' : 'Terminar'}
             </button>
