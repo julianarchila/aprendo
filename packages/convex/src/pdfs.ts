@@ -4,6 +4,7 @@ import { internal } from './_generated/api'
 import type { Doc } from './_generated/dataModel'
 import { slugify } from '../../ingest/src/slug'
 import { questionDocumentValidator } from './validators'
+import { requireAdminStudentId } from './auth'
 
 async function serializeUpload(
   ctx: { storage: { getUrl: (storageId: Doc<'pdfUploads'>['pdfStorageId']) => Promise<string | null> } },
@@ -28,6 +29,7 @@ async function serializeUpload(
 export const generatePdfUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAdminStudentId(ctx)
     return ctx.storage.generateUploadUrl()
   },
 })
@@ -40,6 +42,7 @@ export const createPdfUpload = mutation({
     sizeBytes: v.number(),
   },
   handler: async (ctx, args) => {
+    await requireAdminStudentId(ctx)
     const now = Date.now()
     const pdfUploadId = await ctx.db.insert('pdfUploads', {
       fileName: args.fileName,
@@ -65,6 +68,7 @@ export const retryPdfUpload = mutation({
     pdfUploadId: v.id('pdfUploads'),
   },
   handler: async (ctx, args) => {
+    await requireAdminStudentId(ctx)
     const upload = await ctx.db.get(args.pdfUploadId)
     if (upload == null) {
       throw new Error('PDF upload not found.')
@@ -91,6 +95,7 @@ export const listPdfUploads = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await requireAdminStudentId(ctx)
     const uploads = await ctx.db
       .query('pdfUploads')
       .withIndex('by_createdAt')
@@ -106,6 +111,7 @@ export const getPdfUploadDetail = query({
     pdfUploadId: v.id('pdfUploads'),
   },
   handler: async (ctx, args) => {
+    await requireAdminStudentId(ctx)
     const upload = await ctx.db.get(args.pdfUploadId)
     if (upload == null) {
       return null
@@ -131,6 +137,7 @@ export const getQuestionBrowser = query({
     sequence: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await requireAdminStudentId(ctx)
     const upload = await ctx.db.get(args.pdfUploadId)
     if (upload == null) {
       return null

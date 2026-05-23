@@ -1,11 +1,11 @@
-import { useConvexMutation } from '@convex-dev/react-query'
+import { convexQuery, useConvexMutation } from '@convex-dev/react-query'
 import {
   useMutation,
   useQuery,
   useQueryClient,
   useSuspenseQuery,
 } from '@tanstack/react-query'
-import { Link, createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute, redirect } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '@aprendo/convex/api'
 import MarkdownBlock from '../components/MarkdownBlock.tsx'
@@ -22,6 +22,15 @@ type AdminSearch = {
 }
 
 export const Route = createFileRoute('/admin')({
+  beforeLoad: async ({ context: { queryClient } }) => {
+    const admin = await queryClient.ensureQueryData(
+      convexQuery(api.auth.getCurrentAdmin, {}),
+    )
+    if (admin == null) {
+      throw redirect({ to: '/login' })
+    }
+    return { admin }
+  },
   validateSearch: (search: Record<string, unknown>): AdminSearch => ({
     tab: search.tab === 'questions' ? 'questions' : undefined,
     pdfUploadId:

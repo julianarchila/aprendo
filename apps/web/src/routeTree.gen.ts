@@ -17,6 +17,8 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PracticeSessionIdRouteImport } from './routes/practice.$sessionId'
+import { Route as PracticeSessionIdReviewRouteImport } from './routes/practice.$sessionId.review'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const ProgressRoute = ProgressRouteImport.update({
@@ -59,6 +61,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PracticeSessionIdRoute = PracticeSessionIdRouteImport.update({
+  id: '/$sessionId',
+  path: '/$sessionId',
+  getParentRoute: () => PracticeRoute,
+} as any)
+const PracticeSessionIdReviewRoute = PracticeSessionIdReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => PracticeSessionIdRoute,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -72,9 +84,11 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/diagnostic': typeof DiagnosticRoute
   '/login': typeof LoginRoute
-  '/practice': typeof PracticeRoute
+  '/practice': typeof PracticeRouteWithChildren
   '/progress': typeof ProgressRoute
+  '/practice/$sessionId': typeof PracticeSessionIdRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/practice/$sessionId/review': typeof PracticeSessionIdReviewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -83,9 +97,11 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/diagnostic': typeof DiagnosticRoute
   '/login': typeof LoginRoute
-  '/practice': typeof PracticeRoute
+  '/practice': typeof PracticeRouteWithChildren
   '/progress': typeof ProgressRoute
+  '/practice/$sessionId': typeof PracticeSessionIdRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/practice/$sessionId/review': typeof PracticeSessionIdReviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -95,9 +111,11 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/diagnostic': typeof DiagnosticRoute
   '/login': typeof LoginRoute
-  '/practice': typeof PracticeRoute
+  '/practice': typeof PracticeRouteWithChildren
   '/progress': typeof ProgressRoute
+  '/practice/$sessionId': typeof PracticeSessionIdRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/practice/$sessionId/review': typeof PracticeSessionIdReviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -110,7 +128,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/practice'
     | '/progress'
+    | '/practice/$sessionId'
     | '/api/auth/$'
+    | '/practice/$sessionId/review'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -121,7 +141,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/practice'
     | '/progress'
+    | '/practice/$sessionId'
     | '/api/auth/$'
+    | '/practice/$sessionId/review'
   id:
     | '__root__'
     | '/'
@@ -132,7 +154,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/practice'
     | '/progress'
+    | '/practice/$sessionId'
     | '/api/auth/$'
+    | '/practice/$sessionId/review'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -142,7 +166,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   DiagnosticRoute: typeof DiagnosticRoute
   LoginRoute: typeof LoginRoute
-  PracticeRoute: typeof PracticeRoute
+  PracticeRoute: typeof PracticeRouteWithChildren
   ProgressRoute: typeof ProgressRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -205,6 +229,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/practice/$sessionId': {
+      id: '/practice/$sessionId'
+      path: '/$sessionId'
+      fullPath: '/practice/$sessionId'
+      preLoaderRoute: typeof PracticeSessionIdRouteImport
+      parentRoute: typeof PracticeRoute
+    }
+    '/practice/$sessionId/review': {
+      id: '/practice/$sessionId/review'
+      path: '/review'
+      fullPath: '/practice/$sessionId/review'
+      preLoaderRoute: typeof PracticeSessionIdReviewRouteImport
+      parentRoute: typeof PracticeSessionIdRoute
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -215,6 +253,29 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface PracticeSessionIdRouteChildren {
+  PracticeSessionIdReviewRoute: typeof PracticeSessionIdReviewRoute
+}
+
+const PracticeSessionIdRouteChildren: PracticeSessionIdRouteChildren = {
+  PracticeSessionIdReviewRoute: PracticeSessionIdReviewRoute,
+}
+
+const PracticeSessionIdRouteWithChildren =
+  PracticeSessionIdRoute._addFileChildren(PracticeSessionIdRouteChildren)
+
+interface PracticeRouteChildren {
+  PracticeSessionIdRoute: typeof PracticeSessionIdRouteWithChildren
+}
+
+const PracticeRouteChildren: PracticeRouteChildren = {
+  PracticeSessionIdRoute: PracticeSessionIdRouteWithChildren,
+}
+
+const PracticeRouteWithChildren = PracticeRoute._addFileChildren(
+  PracticeRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
@@ -222,7 +283,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   DiagnosticRoute: DiagnosticRoute,
   LoginRoute: LoginRoute,
-  PracticeRoute: PracticeRoute,
+  PracticeRoute: PracticeRouteWithChildren,
   ProgressRoute: ProgressRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

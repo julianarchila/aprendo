@@ -29,17 +29,27 @@ The tutor should not:
 - tutor disabled
 - no hints
 - no answer explanations during active completion
+- tutor may be enabled in post-diagnostic review if the product allows review tutoring
 
 ### Practice
 
 - tutor enabled
 - hints allowed before answering
-- explanations allowed after answering
+- no direct answer disclosure during active completion
+- full answer explanations allowed in post-practice review
+
+### Simulated exam
+
+- tutor disabled during active completion
+- no hints
+- no answer explanations during active completion
+- tutor may be enabled in post-exam review
 
 ### Review
 
 - tutor enabled
 - explanations and conceptual follow-up are first-class features
+- review mode is a post-completion state over a scored session, not the active solving surface
 
 ## Context Contract
 
@@ -180,4 +190,3 @@ This document does not define:
 - model/provider selection
 - the final tutor prompt
 - long-term cross-session memory behavior
-

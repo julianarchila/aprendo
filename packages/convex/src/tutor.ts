@@ -220,7 +220,11 @@ function buildTutorSystemPrompt(question: QuestionContext | null): string {
       lines.push('Explicación oficial:')
       lines.push(question.officialExplanation)
     }
-    lines.push('Puedes confirmar la respuesta correcta y explicar el razonamiento si el estudiante lo pide.')
+    if (question.correctOption != null) {
+      lines.push('Puedes confirmar la respuesta correcta y explicar el razonamiento si el estudiante lo pide.')
+    } else {
+      lines.push('La sesión todavía no está en revisión. NO reveles ni confirmes la respuesta correcta; ayuda con pistas y razonamiento.')
+    }
   } else {
     lines.push('')
     lines.push('El estudiante AÚN NO ha respondido esta pregunta.')
@@ -467,7 +471,7 @@ export const getPracticeQuestionContext = internalQuery({
     questionId: v.id('questions'),
   },
   handler: async (ctx, args): Promise<QuestionContext | null> => {
-    await requireOwnedPracticeSession(ctx, args)
+    const session = await requireOwnedPracticeSession(ctx, args)
 
     const question = await ctx.db.get(args.questionId)
     if (question == null) return null
@@ -488,6 +492,7 @@ export const getPracticeQuestionContext = internalQuery({
       : 'Sin subtema'
 
     const isAnswered = attempt != null && attempt.selectedOption != null && attempt.isCorrect != null
+    const canReviewAnswers = session.status === 'completed'
 
     return {
       questionNumber: question.questionNumber,
@@ -498,8 +503,8 @@ export const getPracticeQuestionContext = internalQuery({
         label: option.label,
         bodyMarkdown: option.bodyMarkdown,
       })),
-      correctOption: question.answerCorrectOption ?? null,
-      officialExplanation: question.answerSolutionMarkdown ?? null,
+      correctOption: canReviewAnswers ? question.answerCorrectOption ?? null : null,
+      officialExplanation: canReviewAnswers ? question.answerSolutionMarkdown ?? null : null,
       attempt: isAnswered
         ? {
             selectedOption: attempt!.selectedOption!,

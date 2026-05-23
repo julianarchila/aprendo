@@ -89,7 +89,7 @@ At the product level, the system revolves around these concepts:
 - Diagnostic exam: a fixed-length, balanced assessment used to estimate baseline performance
 - Practice session: a generated set of questions chosen for learning rather than pure assessment
 - Attempt: a student's interaction with a question, including answer, correctness, timing, and help usage
-- Review session: a post-practice experience where the student revisits mistakes with AI support
+- Review session: a post-completion experience where the student revisits diagnostic, practice, or simulated-exam mistakes with AI support when allowed
 - Learner profile: an evolving summary of the student's performance by subject and subtopic
 
 ## Main User Flows
@@ -156,7 +156,17 @@ Practice sessions may be:
 - Subtopic-focused practice
 - Review sessions centered on recent mistakes
 
-### 5. AI-assisted practice and review
+### 5. Focused solving and review
+
+Active solving and review are separate experiences.
+
+During active solving, the interface should be minimal and focused on answering one question at a time. It should not show correctness, correct answers, or official explanations before the session is completed.
+
+After completion, the student should move into a review experience where they can inspect which questions were correct or incorrect, see explanations, navigate between reviewed questions, and use the tutor when the session type allows it.
+
+The review experience should be reusable across practice, diagnostic, and future simulated exam sessions.
+
+### 6. AI-assisted practice and review
 
 During practice and review, the student should be able to interact with an AI tutor alongside the question flow.
 
@@ -198,11 +208,12 @@ The assistant should not be available during the diagnostic exam.
 - Generate question sets from the bank
 - Present one question at a time in a focused interface
 - Allow answering, skipping, and navigating within a session
-- Support practice-specific AI help
+- Support practice-specific AI help without revealing answers before review
 
 ### Review and analytics features
 
-- Show correctness and explanations after practice
+- Show correctness and explanations after completed sessions
+- Reuse the review experience across practice, diagnostic, and future simulated exams
 - Show performance by subject and subtopic
 - Show recent mistakes and repeated weak areas
 - Summarize what the student should practice next

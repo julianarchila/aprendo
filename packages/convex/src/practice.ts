@@ -206,6 +206,29 @@ export const createOrGetPracticeSession = mutation({
   },
 })
 
+export const getActivePracticeSession = query({
+  args: {
+    studentId: v.id('students'),
+  },
+  handler: async (ctx, args) => {
+    const inProgress = await ctx.db
+      .query('sessions')
+      .withIndex('by_studentId_type_status', (q) =>
+        q.eq('studentId', args.studentId).eq('type', 'practice').eq('status', 'in_progress'),
+      )
+      .first()
+    if (inProgress) return inProgress
+
+    const created = await ctx.db
+      .query('sessions')
+      .withIndex('by_studentId_type_status', (q) =>
+        q.eq('studentId', args.studentId).eq('type', 'practice').eq('status', 'created'),
+      )
+      .first()
+    return created
+  },
+})
+
 export const getPracticeSession = query({
   args: {
     sessionId: v.id('sessions'),
@@ -232,19 +255,28 @@ export const getPracticeSession = query({
       sessionQuestions.map((sessionQuestion) => ctx.db.get(sessionQuestion.questionId)),
     )
 
+    const canReviewAnswers = session.status === 'completed'
+
     return {
       session,
       questions: sessionQuestions
         .map((sessionQuestion, index) => {
           const question = questions[index]
           if (question == null) return null
+          const displayQuestion = canReviewAnswers
+            ? question
+            : {
+                ...question,
+                answerCorrectOption: undefined,
+                answerSolutionMarkdown: undefined,
+              }
 
           return {
             sessionQuestionId: sessionQuestion._id,
             position: sessionQuestion.position,
             selectionReason: sessionQuestion.selectionReason,
             selectionMetadata: sessionQuestion.selectionMetadata ?? null,
-            question,
+            question: displayQuestion,
             attempt: attemptBySessionQuestionId.get(sessionQuestion._id) ?? null,
           }
         })
@@ -324,10 +356,42 @@ export const submitPracticeAnswer = mutation({
     })
 
     return {
-      isCorrect,
-      correctOption: question.answerCorrectOption,
-      explanation: question.answerSolutionMarkdown ?? null,
+      answered: true,
     }
+  },
+})
+
+export const clearPracticeAnswer = mutation({
+  args: {
+    sessionId: v.id('sessions'),
+    sessionQuestionId: v.id('sessionQuestions'),
+  },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId)
+    if (session == null || session.type !== 'practice') {
+      throw new Error('Practice session not found.')
+    }
+    if (session.status !== 'in_progress') {
+      throw new Error('Practice session is not active.')
+    }
+
+    const sessionQuestion = await ctx.db.get(args.sessionQuestionId)
+    if (sessionQuestion == null || sessionQuestion.sessionId !== args.sessionId) {
+      throw new Error('Practice question not found.')
+    }
+
+    const existing = await ctx.db
+      .query('questionAttempts')
+      .withIndex('by_sessionQuestionId', (q) => q.eq('sessionQuestionId', args.sessionQuestionId))
+      .unique()
+
+    if (existing == null) {
+      return { cleared: true }
+    }
+
+    await ctx.db.delete(existing._id)
+
+    return { cleared: true }
   },
 })
 

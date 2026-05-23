@@ -9,9 +9,11 @@ import { ConvexError } from 'convex/values'
 import authConfig from './auth.config'
 import { components, internal } from './_generated/api'
 import { query } from './_generated/server'
+import type { QueryCtx } from './_generated/server'
 import type { DataModel, Id } from './_generated/dataModel'
 
 const siteUrl = process.env.SITE_URL ?? 'http://localhost:3000'
+const trustedOrigins = Array.from(new Set([siteUrl, 'http://localhost:3002']))
 
 const authFunctions: AuthFunctions = internal.auth
 
@@ -79,7 +81,7 @@ export const { onCreate, onUpdate, onDelete } = authComponent.triggersApi()
 export const createAuth = (ctx: GenericCtx<DataModel>) =>
   betterAuth({
     baseURL: siteUrl,
-    trustedOrigins: [siteUrl],
+    trustedOrigins,
     database: authComponent.adapter(ctx),
     emailAndPassword: {
       enabled: true,
@@ -99,6 +101,22 @@ export const getCurrentStudent = query({
     return {
       _id: student._id,
       email: student.email,
+      isAdmin: student.isAdmin === true,
+    }
+  },
+})
+
+export const getCurrentAdmin = query({
+  args: {},
+  handler: async (ctx) => {
+    const authUser = await authComponent.safeGetAuthUser(ctx)
+    if (!authUser?.userId) return null
+    const student = await ctx.db.get(authUser.userId as Id<'students'>)
+    if (!student?.isAdmin) return null
+    return {
+      _id: student._id,
+      email: student.email,
+      isAdmin: true,
     }
   },
 })
@@ -121,4 +139,15 @@ export async function assertOwnsStudent(
   if (ownerId !== studentId) {
     throw new ConvexError('No tienes acceso a este estudiante.')
   }
+}
+
+export async function requireAdminStudentId(
+  ctx: GenericCtx<DataModel> & Pick<QueryCtx, 'db'>,
+): Promise<Id<'students'>> {
+  const studentId = await requireAuthenticatedStudentId(ctx)
+  const student = await ctx.db.get(studentId)
+  if (!student?.isAdmin) {
+    throw new ConvexError('Necesitas permisos de administrador.')
+  }
+  return studentId
 }

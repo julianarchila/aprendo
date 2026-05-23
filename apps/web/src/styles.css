@@ -699,6 +699,331 @@ pre code {
     color-mix(in srgb, var(--bg-card) 85%, var(--bg) 15%);
 }
 
+.practice-start-shell {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 4vw, 3rem);
+}
+
+.practice-start-panel {
+  width: min(100%, 42rem);
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+.practice-start-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.practice-start-title {
+  max-width: 13ch;
+  margin-bottom: 0.75rem;
+  font-family: var(--font-display);
+  font-size: clamp(2.15rem, 8vw, 4.5rem);
+  line-height: 0.92;
+  font-style: italic;
+  letter-spacing: 0;
+  color: var(--text-primary);
+}
+
+.practice-start-copy {
+  max-width: 36rem;
+  margin-bottom: 1.4rem;
+  color: var(--text-secondary);
+  font-size: 0.98rem;
+  line-height: 1.75;
+}
+
+.practice-solve-shell {
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(0.65rem, 1.8vw, 1.1rem);
+  padding: clamp(0.7rem, 1.8vw, 1.15rem);
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--text-tertiary) 12%, transparent) 1px, transparent 0) 0 0 / 26px 26px,
+    var(--bg);
+}
+
+.practice-solve-topbar,
+.practice-solve-footer {
+  width: min(100%, 58rem);
+  margin: 0 auto;
+}
+
+.practice-solve-topbar {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(12rem, 1fr) minmax(0, auto);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.practice-solve-pill,
+.practice-solve-timer,
+.practice-solve-icon {
+  min-height: 2.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+.practice-solve-pill,
+.practice-solve-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0 0.85rem;
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.practice-solve-pill svg { color: var(--accent); }
+
+.practice-solve-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  justify-self: start;
+  min-width: 0;
+}
+
+.practice-solve-progress strong {
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 3vw, 2.25rem);
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.practice-solve-progress span {
+  color: var(--text-tertiary);
+  font-size: 0.9rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.practice-solve-progress-track {
+  width: clamp(5.5rem, 13vw, 10rem);
+  height: 0.45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-inset);
+}
+
+.practice-solve-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 180ms ease;
+}
+
+.practice-solve-actions {
+  display: inline-flex;
+  justify-self: end;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.practice-solve-timer {
+  font-variant-numeric: tabular-nums;
+}
+
+.practice-solve-timer svg {
+  color: var(--text-tertiary);
+}
+
+.practice-solve-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.45rem;
+  color: var(--text-secondary);
+  transition: transform 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.practice-solve-icon:hover {
+  transform: translateY(-1px);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.practice-solve-main {
+  width: min(100%, 58rem);
+  margin: 0 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 0.5rem;
+}
+
+.practice-solve-question {
+  margin-bottom: clamp(0.75rem, 1.7vw, 1.15rem);
+  padding: clamp(0.9rem, 1.8vw, 1.25rem);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+  color: var(--text-primary);
+}
+
+.practice-solve-question .markdown-body {
+  font-size: 0.98rem;
+  line-height: 1.52;
+}
+
+.practice-solve-question .markdown-body p {
+  margin-bottom: 0.8rem;
+}
+
+.practice-solve-question .markdown-body p:last-child {
+  margin-bottom: 0;
+}
+
+.practice-solve-options {
+  display: grid;
+  gap: clamp(0.55rem, 1.3vw, 0.85rem);
+}
+
+.practice-solve-option {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 3.35rem;
+  width: 100%;
+  padding: 0.58rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-card);
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.practice-solve-option:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--border-strong);
+  background: var(--bg-card-hover);
+}
+
+.practice-solve-option.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  background: var(--accent-soft);
+}
+
+.practice-solve-option-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.05rem;
+  width: 2.05rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+  font-weight: 800;
+}
+
+.practice-solve-option.is-selected .practice-solve-option-label {
+  background: var(--accent);
+  color: white;
+}
+
+.practice-solve-option .markdown-body {
+  font-size: 0.94rem;
+  line-height: 1.38;
+}
+
+.practice-solve-option .markdown-body p {
+  margin-bottom: 0;
+}
+
+.practice-solve-option-radio {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  border: 2px solid var(--border-strong);
+  border-radius: 999px;
+}
+
+.practice-solve-option.is-selected .practice-solve-option-radio {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 5px var(--bg-card), inset 0 0 0 999px var(--accent);
+}
+
+.practice-solve-footer {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) minmax(0, 1fr) minmax(8rem, auto);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.practice-solve-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.practice-solve-dot {
+  width: 0.72rem;
+  height: 0.72rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.practice-solve-dot.is-answered {
+  background: var(--success);
+}
+
+.practice-solve-dot.is-current {
+  width: 1.45rem;
+  background: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .practice-solve-topbar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .practice-solve-progress {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .practice-solve-actions {
+    gap: 0.45rem;
+  }
+
+  .practice-solve-footer {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .practice-solve-dots {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    overflow-x: auto;
+    justify-content: flex-start;
+    padding-bottom: 0.25rem;
+  }
+}
+
 .resizable-panel-group {
   height: 100%;
   min-height: 0;
@@ -859,6 +1184,12 @@ pre code {
   --dot-bg: var(--success-soft);
   --dot-border: color-mix(in srgb, var(--success) 38%, transparent);
   --dot-fg: var(--success-text);
+}
+
+.palette-dot.is-answered {
+  --dot-bg: var(--accent-soft);
+  --dot-border: color-mix(in srgb, var(--accent) 34%, transparent);
+  --dot-fg: var(--accent-text);
 }
 
 .palette-dot.is-incorrect {

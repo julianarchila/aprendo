@@ -55,6 +55,16 @@ export function practiceSessionQuery(sessionId: string | null | undefined) {
   })
 }
 
+export function activePracticeSessionQuery(studentId: string | null | undefined) {
+  if (!hasValue(studentId)) {
+    return convexQuery(api.practice.getActivePracticeSession, 'skip')
+  }
+
+  return convexQuery(api.practice.getActivePracticeSession, {
+    studentId: studentId as never,
+  })
+}
+
 export function practiceTutorThreadQuery(
   practiceSessionId: string | null | undefined,
   studentId: string | null | undefined,

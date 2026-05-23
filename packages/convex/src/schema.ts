@@ -49,6 +49,7 @@ export default defineSchema(
     students: defineTable({
       email: v.string(),
       normalizedEmail: v.string(),
+      isAdmin: v.optional(v.boolean()),
       createdAt: v.number(),
       updatedAt: v.number(),
       lastSeenAt: v.number(),
