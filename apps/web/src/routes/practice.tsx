@@ -81,53 +81,69 @@ function PracticeStartPage() {
     <StudentAppShell
       session={session}
       activeSection="practice"
-      mainClassName="student-shell-main-immersive"
     >
       <div className="practice-start-shell fade-in">
-        <section className="practice-start-panel">
-          <div className="practice-start-mark" aria-hidden>
-            <BookOpenCheck size={24} />
-          </div>
-          <p className="kicker mb-2">Practica recomendada</p>
-          <h1 className="practice-start-title">Empieza cuando estés listo</h1>
-          <p className="practice-start-copy">
-            {activePractice == null
-              ? 'Resolverás una sesión enfocada sin ver respuestas ni retroalimentación. Al terminar pasarás a una pantalla de revisión con resultados, explicaciones y tutor.'
-              : 'Tienes una práctica activa. Continúa donde quedaste antes de crear una sesión nueva.'}
-          </p>
-          {activePractice == null ? (
-            <button
-              type="button"
-              disabled={createSessionMutation.isPending}
-              onClick={() => createSessionMutation.mutate()}
-              className="btn-primary inline-flex items-center gap-2"
-            >
-              <Play size={16} />
-              {createSessionMutation.isPending ? 'Preparando...' : 'Iniciar práctica'}
-            </button>
-          ) : (
-            <Link
-              to="/practice/$sessionId"
-              params={{ sessionId: activePractice._id }}
-              className="btn-primary inline-flex items-center gap-2 no-underline"
-            >
-              <RotateCw size={16} />
-              Continuar práctica
-            </Link>
-          )}
-          {createSessionMutation.error ? (
-            <div className="stage-alert mt-5">
-              {createSessionMutation.error instanceof Error
-                ? createSessionMutation.error.message
-              : 'No se pudo crear la práctica.'}
+        <section className="card practice-start-panel">
+          <div className="practice-start-summary">
+            <div className="practice-start-mark" aria-hidden>
+              <BookOpenCheck size={20} />
             </div>
-          ) : null}
+            <div className="min-w-0">
+              <p className="kicker mb-1">Practica recomendada</p>
+              <h1 className="practice-start-title">
+                {activePractice == null ? 'Nueva sesión de práctica' : 'Continúa tu práctica'}
+              </h1>
+              <p className="practice-start-copy">
+                {activePractice == null
+                  ? 'Resuelve una sesión enfocada. Al terminar verás resultados, explicaciones y tutor.'
+                  : 'Tienes una sesión activa guardada. Retómala antes de empezar otra.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="practice-start-actions">
+            {activePractice == null ? (
+              <button
+                type="button"
+                disabled={createSessionMutation.isPending}
+                onClick={() => createSessionMutation.mutate()}
+                className="btn-primary"
+              >
+                <Play size={16} />
+                {createSessionMutation.isPending ? 'Preparando...' : 'Iniciar práctica'}
+              </button>
+            ) : (
+              <Link
+                to="/practice/$sessionId"
+                params={{ sessionId: activePractice._id }}
+                className="btn-primary no-underline"
+              >
+                <RotateCw size={16} />
+                Continuar
+              </Link>
+            )}
+          </div>
+        </section>
+
+        {createSessionMutation.error ? (
+          <div className="stage-alert">
+            {createSessionMutation.error instanceof Error
+              ? createSessionMutation.error.message
+              : 'No se pudo crear la práctica.'}
+          </div>
+        ) : null}
+
+        <section className="card practice-session-list">
+          <div className="practice-session-list-header">
+            <div>
+              <p className="kicker mb-1">Sesiones recientes</p>
+              <h2>Historial de práctica</h2>
+            </div>
+            <span>{practiceSessions.length} sesiones</span>
+          </div>
 
           {practiceSessions.length > 0 ? (
-            <div className="practice-session-list">
-              <div className="practice-session-list-header">
-                <p className="kicker">Sesiones recientes</p>
-              </div>
+            <div className="practice-session-list-body">
               {activePractice != null ? (
                 <Link
                   to="/practice/$sessionId"
@@ -167,7 +183,11 @@ function PracticeStartPage() {
                 </Link>
               ))}
             </div>
-          ) : null}
+          ) : (
+            <div className="practice-session-empty">
+              <p>Aun no tienes sesiones. Inicia una práctica para crear tu historial.</p>
+            </div>
+          )}
         </section>
       </div>
     </StudentAppShell>
