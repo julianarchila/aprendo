@@ -1,4 +1,5 @@
 import { v } from 'convex/values'
+import type { SessionKind } from './sessionKinds'
 
 export const pdfUploadStatusValidator = v.union(
   v.literal('uploaded'),
@@ -66,11 +67,21 @@ export const questionDocumentValidator = v.object({
   eligibilityEvaluatedAt: v.optional(v.number()),
 })
 
-export const sessionTypeValidator = v.union(
+export const sessionKindValidator = v.union(
   v.literal('diagnostic'),
-  v.literal('practice'),
-  v.literal('review'),
+  v.literal('recommended'),
+  v.literal('topic'),
+  v.literal('simulacro'),
 )
+
+// Compile-time guard: keep the validator literals in sync with SESSION_KINDS.
+type ValidatedSessionKind = typeof sessionKindValidator.type
+const _assertSessionKind: ValidatedSessionKind extends SessionKind
+  ? SessionKind extends ValidatedSessionKind
+    ? true
+    : never
+  : never = true
+void _assertSessionKind
 
 export const sessionStatusValidator = v.union(
   v.literal('created'),
@@ -81,10 +92,12 @@ export const sessionStatusValidator = v.union(
 
 export const selectionReasonValidator = v.union(
   v.literal('balanced_diagnostic'),
+  v.literal('balanced_coverage'),
   v.literal('weak_subtopic'),
   v.literal('recent_mistake'),
   v.literal('reinforcement'),
   v.literal('confidence_building'),
+  v.literal('topic_focus'),
 )
 
 export const recommendationSourceValidator = v.union(
@@ -104,11 +117,17 @@ export const studentSummaryValidator = v.object({
 
 export const sessionDocumentValidator = v.object({
   studentId: v.id('students'),
-  type: sessionTypeValidator,
+  kind: sessionKindValidator,
   status: sessionStatusValidator,
   recommendationSource: recommendationSourceValidator,
+  // Only set for `topic` sessions — the subject the student chose.
+  subjectId: v.optional(v.string()),
   startedAt: v.number(),
   completedAt: v.optional(v.number()),
+  // Snapshot of the kind's time limit at creation, or absent for untimed kinds.
+  timeLimitMs: v.optional(v.number()),
+  // Convenience deadline (startedAt + timeLimitMs) for timed sessions.
+  expiresAt: v.optional(v.number()),
   questionCount: v.number(),
   currentPosition: v.number(),
   summary: v.optional(studentSummaryValidator),
@@ -119,7 +138,7 @@ export const questionAttemptValidator = v.object({
   sessionId: v.id('sessions'),
   questionId: v.id('questions'),
   sessionQuestionId: v.id('sessionQuestions'),
-  attemptType: sessionTypeValidator,
+  attemptType: sessionKindValidator,
   selectedOption: v.optional(v.string()),
   isCorrect: v.optional(v.boolean()),
   answeredAt: v.optional(v.number()),

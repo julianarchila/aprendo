@@ -254,8 +254,8 @@ export const rebuildStudentProgress = internalMutation({
 
     const completedDiagnosticSessions = await ctx.db
       .query('sessions')
-      .withIndex('by_studentId_type', (q) =>
-        q.eq('studentId', args.studentId).eq('type', 'diagnostic'),
+      .withIndex('by_studentId_kind', (q) =>
+        q.eq('studentId', args.studentId).eq('kind', 'diagnostic'),
       )
       .collect()
     const latestDiagnostic = completedDiagnosticSessions

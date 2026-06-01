@@ -41,8 +41,8 @@ async function computeStudentAppState(ctx: QueryCtx, studentId: Id<'students'>) 
 
   const sessions = await ctx.db
     .query('sessions')
-    .withIndex('by_studentId_type', (q) =>
-      q.eq('studentId', studentId).eq('type', 'diagnostic'),
+    .withIndex('by_studentId_kind', (q) =>
+      q.eq('studentId', studentId).eq('kind', 'diagnostic'),
     )
     .collect()
 

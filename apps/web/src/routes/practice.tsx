@@ -1,39 +1,72 @@
 import { useConvexMutation } from '@convex-dev/react-query'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link, Outlet, createFileRoute, useNavigate, useRouterState } from '@tanstack/react-router'
-import { BookOpenCheck, CheckCircle2, Play, RotateCw } from 'lucide-react'
-import { useEffect } from 'react'
+import { ArrowRight, Check, ChevronRight, Clock3, Play } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { api } from '@aprendo/convex/api'
+import {
+  LAUNCHABLE_SESSION_KINDS,
+  SESSION_KIND_CONFIG,
+  type SessionKind,
+} from '@aprendo/convex/sessionKinds'
 import { StudentAppShell } from '../components/StudentAppShell.tsx'
-import { activePracticeSessionQuery, studentAppStateQuery, studentPracticeSessionsQuery } from '../lib/student-queries.ts'
+import {
+  formatSessionDate,
+  formatTimeLimit,
+  getKindIcon,
+} from '../lib/session-display.ts'
+import { sessionHistoryQuery, studentAppStateQuery } from '../lib/student-queries.ts'
 import { useCurrentStudent } from '../lib/student-session.ts'
+import { getSubjectLabel, subjectIds } from '../lib/taxonomy.ts'
 
 export const Route = createFileRoute('/practice')({
-  component: PracticeStartPage,
+  component: PracticeHubPage,
 })
 
-function PracticeStartPage() {
+type SessionRow = {
+  _id: string
+  kind: SessionKind
+  status: 'created' | 'in_progress' | 'completed' | 'abandoned'
+  subjectId?: string
+  startedAt: number
+  questionCount: number
+  summary?: { correctCount: number; questionCount: number; accuracy: number } | null
+}
+
+const FILTERS: Array<{ value: 'all' | SessionKind; label: string }> = [
+  { value: 'all', label: 'Todas' },
+  { value: 'recommended', label: 'Recomendada' },
+  { value: 'topic', label: 'Por tema' },
+  { value: 'simulacro', label: 'Simulacro' },
+]
+
+function PracticeHubPage() {
   const navigate = useNavigate()
   const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const isHubIndex = pathname === '/practice'
   const { session, isReady } = useCurrentStudent()
-  const isPracticeIndex = pathname === '/practice'
+
+  const [expandedKind, setExpandedKind] = useState<SessionKind | null>(null)
+  const [filter, setFilter] = useState<'all' | SessionKind>('all')
+
   const appStateQuery = useQuery({
     ...studentAppStateQuery(session?.studentId),
-    enabled: isPracticeIndex && isReady && session != null,
+    enabled: isHubIndex && isReady && session != null,
   })
-  const activePracticeQuery = useQuery({
-    ...activePracticeSessionQuery(session?.studentId),
-    enabled: isPracticeIndex && isReady && session != null,
+  const historyQuery = useQuery({
+    ...sessionHistoryQuery(session?.studentId, { limit: 100 }),
+    enabled: isHubIndex && isReady && session != null,
   })
-  const practiceSessionsQuery = useQuery({
-    ...studentPracticeSessionsQuery(session?.studentId),
-    enabled: isPracticeIndex && isReady && session != null,
-  })
-  const createPracticeSession = useConvexMutation(api.practice.createOrGetPracticeSession)
-  const createSessionMutation = useMutation({
-    mutationFn: async () => {
+
+  const createSession = useConvexMutation(api.sessions.createSession)
+  const startMutation = useMutation({
+    mutationFn: async (input: { kind: SessionKind; subjectId?: string }) => {
       if (session == null) throw new Error('No has iniciado sesión.')
-      return createPracticeSession({ studentId: session.studentId })
+      return createSession({
+        studentId: session.studentId,
+        kind: input.kind,
+        ...(input.subjectId != null ? { subjectId: input.subjectId } : {}),
+      })
     },
     onSuccess: async (sessionId) => {
       await navigate({ to: '/practice/$sessionId', params: { sessionId } })
@@ -41,151 +74,216 @@ function PracticeStartPage() {
   })
 
   useEffect(() => {
-    if (!isPracticeIndex) return
+    if (!isHubIndex) return
     if (isReady && session == null) {
       void navigate({ to: '/login' })
     }
-  }, [isPracticeIndex, isReady, navigate, session])
+  }, [isHubIndex, isReady, navigate, session])
 
   useEffect(() => {
-    if (!isPracticeIndex) return
+    if (!isHubIndex) return
     if (!isReady || session == null || appStateQuery.data == null) return
     if (!appStateQuery.data.hasCompletedDiagnostic) {
       void navigate({ to: '/diagnostic' })
     }
-  }, [appStateQuery.data, isPracticeIndex, isReady, navigate, session])
+  }, [appStateQuery.data, isHubIndex, isReady, navigate, session])
 
-  if (!isPracticeIndex) {
+  if (!isHubIndex) {
     return <Outlet />
   }
 
-  if (
-    !isReady
-    || session == null
-    || appStateQuery.isPending
-    || activePracticeQuery.isPending
-    || practiceSessionsQuery.isPending
-  ) {
+  if (!isReady || session == null || appStateQuery.isPending || historyQuery.isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
-        <p className="text-sm text-[var(--text-tertiary)]">Cargando...</p>
+        <p className="text-sm text-[var(--text-tertiary)]">Cargando…</p>
       </div>
     )
   }
 
-  const activePractice = activePracticeQuery.data ?? null
-  const practiceSessions = practiceSessionsQuery.data ?? []
-  const completedSessions = practiceSessions.filter((practiceSession) => practiceSession.status === 'completed')
+  const sessions = (historyQuery.data ?? []) as SessionRow[]
+  const inProgress = sessions.filter((s) => s.status === 'in_progress' || s.status === 'created')
+  const completed = sessions.filter((s) => s.status === 'completed')
+  const filtered =
+    filter === 'all' ? completed : completed.filter((s) => s.kind === filter)
 
   return (
-    <StudentAppShell
-      session={session}
-      activeSection="practice"
-    >
-      <div className="practice-start-shell fade-in">
-        <section className="card practice-start-panel">
-          <div className="practice-start-summary">
-            <div className="practice-start-mark" aria-hidden>
-              <BookOpenCheck size={20} />
-            </div>
-            <div className="min-w-0">
-              <p className="kicker mb-1">Practica recomendada</p>
-              <h1 className="practice-start-title">
-                {activePractice == null ? 'Nueva sesión de práctica' : 'Continúa tu práctica'}
-              </h1>
-              <p className="practice-start-copy">
-                {activePractice == null
-                  ? 'Resuelve una sesión enfocada. Al terminar verás resultados, explicaciones y tutor.'
-                  : 'Tienes una sesión activa guardada. Retómala antes de empezar otra.'}
-              </p>
-            </div>
-          </div>
+    <StudentAppShell session={session} activeSection="practice">
+      <div className="practice-hub fade-in">
+        <header className="hub-head">
+          <p className="kicker">Práctica</p>
+          <h1 className="hub-title">¿Qué quieres practicar hoy?</h1>
+        </header>
 
-          <div className="practice-start-actions">
-            {activePractice == null ? (
-              <button
-                type="button"
-                disabled={createSessionMutation.isPending}
-                onClick={() => createSessionMutation.mutate()}
-                className="btn-primary"
-              >
-                <Play size={16} />
-                {createSessionMutation.isPending ? 'Preparando...' : 'Iniciar práctica'}
-              </button>
-            ) : (
-              <Link
-                to="/practice/$sessionId"
-                params={{ sessionId: activePractice._id }}
-                className="btn-primary no-underline"
-              >
-                <RotateCw size={16} />
-                Continuar
-              </Link>
-            )}
-          </div>
+        <section className="hub-launch" aria-label="Iniciar una sesión">
+          {LAUNCHABLE_SESSION_KINDS.map((kind) => {
+            const config = SESSION_KIND_CONFIG[kind]
+            const Icon = getKindIcon(kind)
+            const isExpanded = expandedKind === kind
+            const isStarting = startMutation.isPending && startMutation.variables?.kind === kind
+
+            return (
+              <div key={kind} className={`launch-card${isExpanded ? ' is-expanded' : ''}`}>
+                <button
+                  type="button"
+                  className="launch-card-main"
+                  disabled={startMutation.isPending}
+                  onClick={() => {
+                    if (config.requiresSubject) {
+                      setExpandedKind((prev) => (prev === kind ? null : kind))
+                    } else {
+                      startMutation.mutate({ kind })
+                    }
+                  }}
+                >
+                  <span className="launch-card-icon" aria-hidden>
+                    <Icon size={20} />
+                  </span>
+                  <span className="launch-card-body">
+                    <span className="launch-card-title">{config.labelEs}</span>
+                    <span className="launch-card-copy">{config.taglineEs}</span>
+                    <span className="launch-card-meta">
+                      <span>
+                        {config.strategy === 'balanced_by_subject'
+                          ? `${(config.questionsPerSubject ?? 0) * subjectIds.length} preguntas`
+                          : `${config.totalQuestions ?? 0} preguntas`}
+                      </span>
+                      {config.timeLimitMs != null ? (
+                        <span className="launch-card-meta-time">
+                          <Clock3 size={12} /> {formatTimeLimit(config.timeLimitMs)}
+                        </span>
+                      ) : null}
+                    </span>
+                  </span>
+                  <span className="launch-card-cta" aria-hidden>
+                    {config.requiresSubject ? <ChevronRight size={18} /> : isStarting ? '…' : <Play size={16} />}
+                  </span>
+                </button>
+
+                {config.requiresSubject && isExpanded ? (
+                  <div className="topic-picker" role="group" aria-label="Elige una asignatura">
+                    {subjectIds.map((subjectId) => (
+                      <button
+                        key={subjectId}
+                        type="button"
+                        className="topic-chip"
+                        disabled={startMutation.isPending}
+                        onClick={() => startMutation.mutate({ kind, subjectId })}
+                      >
+                        {getSubjectLabel(subjectId)}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
         </section>
 
-        {createSessionMutation.error ? (
+        {startMutation.error ? (
           <div className="stage-alert">
-            {createSessionMutation.error instanceof Error
-              ? createSessionMutation.error.message
-              : 'No se pudo crear la práctica.'}
+            {startMutation.error instanceof Error
+              ? startMutation.error.message
+              : 'No se pudo iniciar la sesión.'}
           </div>
         ) : null}
 
-        <section className="card practice-session-list">
-          <div className="practice-session-list-header">
-            <div>
-              <p className="kicker mb-1">Sesiones recientes</p>
-              <h2>Historial de práctica</h2>
-            </div>
-            <span>{practiceSessions.length} sesiones</span>
-          </div>
-
-          {practiceSessions.length > 0 ? (
-            <div className="practice-session-list-body">
-              {activePractice != null ? (
+        {inProgress.length > 0 ? (
+          <section className="hub-resume" aria-label="Sesiones en curso">
+            {inProgress.map((s) => {
+              const Icon = getKindIcon(s.kind)
+              return (
                 <Link
+                  key={s._id}
                   to="/practice/$sessionId"
-                  params={{ sessionId: activePractice._id }}
-                  className="practice-session-row is-active"
+                  params={{ sessionId: s._id }}
+                  className="resume-row"
                 >
-                  <span className="practice-session-row-icon">
-                    <RotateCw size={15} />
+                  <span className="resume-row-icon" aria-hidden>
+                    <Icon size={16} />
                   </span>
-                  <span className="min-w-0 flex-1 text-left">
-                    <strong>Práctica en curso</strong>
-                    <small>{activePractice.questionCount} preguntas</small>
+                  <span className="min-w-0 flex-1">
+                    <strong>{SESSION_KIND_CONFIG[s.kind].labelEs} en curso</strong>
+                    <small>
+                      {s.subjectId != null ? `${getSubjectLabel(s.subjectId)} · ` : ''}
+                      {s.questionCount} preguntas
+                    </small>
                   </span>
-                  <span className="practice-session-row-action">Continuar</span>
+                  <span className="resume-row-cta">
+                    Continuar <ArrowRight size={14} />
+                  </span>
                 </Link>
-              ) : null}
+              )
+            })}
+          </section>
+        ) : null}
 
-              {completedSessions.slice(0, 5).map((practiceSession) => (
-                <Link
-                  key={practiceSession._id}
-                  to="/practice/$sessionId/review"
-                  params={{ sessionId: practiceSession._id }}
-                  className="practice-session-row"
+        <section className="hub-history card">
+          <div className="hub-history-head">
+            <div>
+              <p className="kicker mb-1">Historial</p>
+              <h2>Tus sesiones</h2>
+            </div>
+            <div className="hub-filters" role="tablist" aria-label="Filtrar por tipo">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={filter === f.value}
+                  className={`hub-filter${filter === f.value ? ' is-active' : ''}`}
+                  onClick={() => setFilter(f.value)}
                 >
-                  <span className="practice-session-row-icon">
-                    <CheckCircle2 size={15} />
-                  </span>
-                  <span className="min-w-0 flex-1 text-left">
-                    <strong>
-                      {practiceSession.summary
-                        ? `${practiceSession.summary.correctCount}/${practiceSession.summary.questionCount} correctas`
-                        : 'Práctica completada'}
-                    </strong>
-                    <small>{new Date(practiceSession.startedAt).toLocaleDateString('es-CO')}</small>
-                  </span>
-                  <span className="practice-session-row-action">Revisar</span>
-                </Link>
+                  {f.label}
+                </button>
               ))}
             </div>
+          </div>
+
+          {filtered.length > 0 ? (
+            <div className="hub-history-body">
+              {filtered.map((s) => {
+                const Icon = getKindIcon(s.kind)
+                const correct = s.summary?.correctCount ?? 0
+                const total = s.summary?.questionCount ?? s.questionCount
+                const accuracy = s.summary?.accuracy ?? 0
+                return (
+                  <Link
+                    key={s._id}
+                    to="/practice/$sessionId/review"
+                    params={{ sessionId: s._id }}
+                    className="history-row"
+                  >
+                    <span className="history-row-icon" aria-hidden>
+                      <Icon size={15} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <strong>
+                        {SESSION_KIND_CONFIG[s.kind].labelEs}
+                        {s.subjectId != null ? ` · ${getSubjectLabel(s.subjectId)}` : ''}
+                      </strong>
+                      <small>{formatSessionDate(s.startedAt)}</small>
+                    </span>
+                    <span className="history-row-score">
+                      <span className="history-row-fraction">
+                        {correct}<span className="history-row-of">/{total}</span>
+                      </span>
+                      <span
+                        className={`history-row-badge${accuracy >= 0.7 ? ' is-good' : accuracy >= 0.4 ? ' is-mid' : ' is-low'}`}
+                      >
+                        <Check size={11} /> {Math.round(accuracy * 100)}%
+                      </span>
+                    </span>
+                  </Link>
+                )
+              })}
+            </div>
           ) : (
-            <div className="practice-session-empty">
-              <p>Aun no tienes sesiones. Inicia una práctica para crear tu historial.</p>
+            <div className="hub-history-empty">
+              <p>
+                {filter === 'all'
+                  ? 'Aún no tienes sesiones completadas. Inicia una práctica arriba.'
+                  : 'No tienes sesiones de este tipo todavía.'}
+              </p>
             </div>
           )}
         </section>

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   latestDiagnosticQuery,
-  practiceSessionQuery,
   practiceTutorThreadQuery,
+  sessionQuery,
   studentProgressQuery,
 } from '../lib/student-queries'
 
@@ -14,7 +14,7 @@ describe('web scaffold', () => {
   it('skips student-scoped queries when the student id is missing', () => {
     expect(latestDiagnosticQuery('')).toMatchObject({
       enabled: false,
-      queryKey: ['convexQuery', 'diagnostics:getStudentLatestDiagnostic', 'skip'],
+      queryKey: ['convexQuery', 'sessions:getLatestDiagnostic', 'skip'],
     })
 
     expect(studentProgressQuery(undefined)).toMatchObject({
@@ -22,9 +22,9 @@ describe('web scaffold', () => {
       queryKey: ['convexQuery', 'progress:getStudentProgress', 'skip'],
     })
 
-    expect(practiceSessionQuery(null)).toMatchObject({
+    expect(sessionQuery(null)).toMatchObject({
       enabled: false,
-      queryKey: ['convexQuery', 'practice:getPracticeSession', 'skip'],
+      queryKey: ['convexQuery', 'sessions:getSession', 'skip'],
     })
 
     expect(practiceTutorThreadQuery('', undefined)).toMatchObject({

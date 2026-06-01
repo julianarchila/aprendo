@@ -58,9 +58,9 @@ export default defineSchema(
       .index('by_createdAt', ['createdAt']),
     sessions: defineTable(sessionDocumentValidator)
       .index('by_studentId', ['studentId'])
-      .index('by_studentId_type', ['studentId', 'type'])
+      .index('by_studentId_kind', ['studentId', 'kind'])
       .index('by_studentId_status', ['studentId', 'status'])
-      .index('by_studentId_type_status', ['studentId', 'type', 'status'])
+      .index('by_studentId_kind_status', ['studentId', 'kind', 'status'])
       .index('by_studentId_startedAt', ['studentId', 'startedAt']),
     sessionQuestions: defineTable({
       sessionId: v.id('sessions'),

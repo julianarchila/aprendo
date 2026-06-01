@@ -242,12 +242,15 @@ async function requireOwnedPracticeSession(
     studentId: Id<'students'>
   },
 ) {
+  // The tutor works for any session kind (recommended, topic, simulacro,
+  // diagnostic review). Answer disclosure is gated separately by session
+  // status, not by kind.
   const session = await ctx.db.get(args.practiceSessionId)
-  if (session == null || session.type !== 'practice') {
-    throw new Error('Practice session not found.')
+  if (session == null) {
+    throw new Error('Session not found.')
   }
   if (session.studentId !== args.studentId) {
-    throw new Error('Practice session does not belong to this student.')
+    throw new Error('Session does not belong to this student.')
   }
   return session
 }

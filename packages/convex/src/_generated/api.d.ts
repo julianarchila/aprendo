@@ -9,13 +9,14 @@
  */
 
 import type * as auth from "../auth.js";
-import type * as diagnostics from "../diagnostics.js";
 import type * as http from "../http.js";
+import type * as migrations from "../migrations.js";
 import type * as myFunctions from "../myFunctions.js";
 import type * as pdfPipeline from "../pdfPipeline.js";
 import type * as pdfs from "../pdfs.js";
-import type * as practice from "../practice.js";
 import type * as progress from "../progress.js";
+import type * as sessionKinds from "../sessionKinds.js";
+import type * as sessions from "../sessions.js";
 import type * as students from "../students.js";
 import type * as tutor from "../tutor.js";
 import type * as validators from "../validators.js";
@@ -28,13 +29,14 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
-  diagnostics: typeof diagnostics;
   http: typeof http;
+  migrations: typeof migrations;
   myFunctions: typeof myFunctions;
   pdfPipeline: typeof pdfPipeline;
   pdfs: typeof pdfs;
-  practice: typeof practice;
   progress: typeof progress;
+  sessionKinds: typeof sessionKinds;
+  sessions: typeof sessions;
   students: typeof students;
   tutor: typeof tutor;
   validators: typeof validators;

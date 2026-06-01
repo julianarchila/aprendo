@@ -10,7 +10,8 @@
   },
   "exports": {
     "./api": "./src/_generated/api.js",
-    "./dataModel": "./src/_generated/dataModel.js"
+    "./dataModel": "./src/_generated/dataModel.js",
+    "./sessionKinds": "./src/sessionKinds.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.54",
