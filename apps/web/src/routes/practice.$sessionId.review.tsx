@@ -94,12 +94,14 @@ function ReviewPage() {
 
   const createTutorThread = useConvexMutation(api.tutor.createOrGetPracticeTutorThread)
   const clearTutorChat = useConvexMutation(api.tutor.clearPracticeTutorChat)
+  const abortTutorStream = useConvexMutation(api.tutor.abortPracticeTutorStream)
   const sendTutorMessage = useAction(api.tutor.sendPracticeTutorMessage)
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [hasEnsuredTutorThread, setHasEnsuredTutorThread] = useState(false)
   const [tutorThreadError, setTutorThreadError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const [isAborting, setIsAborting] = useState(false)
   const [isCompactViewport, setIsCompactViewport] = useState(false)
   const [isTutorSheetOpen, setIsTutorSheetOpen] = useState(false)
   const [isTutorCollapsed, setIsTutorCollapsed] = useState(false)
@@ -340,6 +342,17 @@ function ReviewPage() {
     })
   }, [tutorMessagesResult.results])
 
+  // The order of the message currently being streamed, used to abort precisely.
+  const streamingOrder = useMemo(() => {
+    let order: number | null = null
+    for (const message of tutorMessagesResult.results) {
+      if (message.streaming === true && typeof message.order === 'number') {
+        order = message.order
+      }
+    }
+    return order
+  }, [tutorMessagesResult.results])
+
   if (!isReady || session == null || reviewQuery.isPending || sessionDoc == null) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
@@ -369,15 +382,32 @@ function ReviewPage() {
   const isLast = currentIndex === questions.length - 1
 
   const lastMessage = tutorMessages.at(-1)
-  const isTutorThinking = tutorMutation.isPending
+  const isGenerating = tutorMutation.isPending
+  // Show the "thinking" placeholder only until the assistant's streamed reply
+  // starts arriving; once deltas land, the streaming bubble takes over.
+  const isTutorThinking = isGenerating
     && (lastMessage?.role !== 'assistant' || lastMessage?.streaming !== true)
-  const canSendTutorMessage = tutorThreadError == null && tutorThreadId != null && !tutorMutation.isPending
+  const canSendTutorMessage = tutorThreadError == null && tutorThreadId != null && !isGenerating
   const sendTutorPrompt = (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || !canSendTutorMessage) return
     tutorMutation.mutate({ prompt: trimmed, questionId: currentQuestion.question._id })
     setDraft('')
     if (isCompactViewport) setIsTutorSheetOpen(true)
+  }
+  const handleStopTutor = () => {
+    if (!isGenerating || isAborting || tutorThreadId == null) return
+    setIsAborting(true)
+    abortTutorStream({
+      practiceSessionId: sessionDoc._id,
+      studentId: studentId as never,
+      threadId: tutorThreadId,
+      order: streamingOrder ?? undefined,
+    })
+      .catch(() => {
+        // The action resolves on its own when the stream stops; swallow races.
+      })
+      .finally(() => setIsAborting(false))
   }
   const canClearTutorChat = tutorThreadError == null
     && tutorThreadId != null
@@ -410,9 +440,10 @@ function ReviewPage() {
             <ArrowLeft size={16} />
           </button>
           <span className="stage-kicker">
-            {getKindLabel(sessionDoc.kind)} <span className="stage-kicker-sep">·</span> {currentIndex + 1}/{questions.length}
+            <span className="stage-kicker-label">{getKindLabel(sessionDoc.kind)}</span>
+            <span className="stage-kicker-sep">·</span> {currentIndex + 1}/{questions.length}
           </span>
-          <div className="stage-tags inline-flex min-w-0 items-center gap-[0.4rem]">
+          <div className="stage-tags">
             <span className="chip chip-accent">{getSubjectLabel(currentQuestion.question.subjectId ?? 'sin_asignar')}</span>
             <span
               className="chip stage-subtopic-chip"
@@ -607,10 +638,10 @@ function ReviewPage() {
         <PromptInputFooter>
           <span className="tutor-composer-hint"><kbd>Enter</kbd> para enviar</span>
           <PromptInputSubmit
-            type="submit"
-            status={tutorMutation.isPending ? 'streaming' : 'ready'}
-            disabled={!canSendTutorMessage || draft.trim().length === 0}
-            aria-label="Enviar mensaje"
+            status={isGenerating ? 'streaming' : 'ready'}
+            onStop={handleStopTutor}
+            disabled={isGenerating ? isAborting : (!canSendTutorMessage || draft.trim().length === 0)}
+            aria-label={isGenerating ? 'Detener generación' : 'Enviar mensaje'}
           />
         </PromptInputFooter>
       </PromptInput>
@@ -655,9 +686,17 @@ function ReviewPage() {
         ) : (
           <>
             <ResizablePanelGroup
+              // Remount the group when the tutor collapses/expands so each state
+              // mounts with the correct panels and restores the saved split
+              // cleanly instead of normalizing from a stale 1-panel layout.
+              key={isTutorCollapsed ? 'collapsed' : 'expanded'}
               orientation="horizontal"
               defaultLayout={storedLayoutRef.current}
               onLayoutChanged={(layout) => {
+                // Don't persist the collapsed single-panel layout — it would
+                // clobber the two-pane split we want to restore on expand.
+                if (isTutorCollapsed) return
+                storedLayoutRef.current = layout
                 if (typeof window === 'undefined') return
                 try {
                   window.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout))
@@ -669,7 +708,7 @@ function ReviewPage() {
             >
               <ResizablePanel
                 id={STAGE_PANEL_ID}
-                defaultSize={isTutorCollapsed ? 100 : 60}
+                defaultSize={60}
                 minSize={38}
                 className="relative h-full min-h-0"
               >

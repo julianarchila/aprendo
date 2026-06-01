@@ -1,3 +1,4 @@
+import { useCallback, type PointerEvent } from 'react'
 import {
   Group,
   Panel,
@@ -30,10 +31,30 @@ export function ResizablePanel({ className, ...props }: PanelProps) {
   )
 }
 
-export function ResizableHandle({ className, ...props }: SeparatorProps) {
+export function ResizableHandle({ className, onPointerDown, ...props }: SeparatorProps) {
+  // react-resizable-panels v4 captures the pointer but does not suppress text
+  // selection, so dragging the handle highlights the panel content. Flag the
+  // document while a drag is in progress and let CSS disable selection.
+  const handlePointerDown = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      onPointerDown?.(event)
+      if (typeof document === 'undefined') return
+      document.documentElement.setAttribute('data-resizing-panels', '')
+      const clear = () => {
+        document.documentElement.removeAttribute('data-resizing-panels')
+        window.removeEventListener('pointerup', clear)
+        window.removeEventListener('pointercancel', clear)
+      }
+      window.addEventListener('pointerup', clear)
+      window.addEventListener('pointercancel', clear)
+    },
+    [onPointerDown],
+  )
+
   return (
     <Separator
       className={joinClasses('resizable-handle', className)}
+      onPointerDown={handlePointerDown}
       {...props}
     >
       <span className="resizable-handle-grip" />

@@ -1,4 +1,4 @@
-import { Agent, createTool, extractText, listMessages, syncStreams, vStreamArgs, vStreamMessagesReturnValue } from '@convex-dev/agent'
+import { abortStream, Agent, createTool, extractText, listMessages, listStreams, syncStreams, vStreamArgs, vStreamMessagesReturnValue } from '@convex-dev/agent'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 import { stepCountIs } from 'ai'
 import { z } from 'zod'
@@ -565,7 +565,59 @@ export const sendPracticeTutorMessage = action({
 
     return {
       promptMessageId: result.promptMessageId,
+      order: result.order,
     }
+  },
+})
+
+const ABORT_REASON = 'Cancelado por el estudiante.'
+
+export const abortPracticeTutorStream = mutation({
+  args: {
+    practiceSessionId: v.id('sessions'),
+    studentId: v.id('students'),
+    threadId: v.string(),
+    // The order of the streaming message to abort. If omitted, every active
+    // stream on the thread is aborted (e.g. when the stream hasn't surfaced an
+    // order on the client yet).
+    order: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireOwnedPracticeSession(ctx, {
+      practiceSessionId: args.practiceSessionId,
+      studentId: args.studentId,
+    })
+
+    // Make sure the thread we're aborting actually belongs to this session.
+    const mapping = await ctx.db
+      .query('practiceTutorThreads')
+      .withIndex('by_practiceSessionId', (q) => q.eq('practiceSessionId', args.practiceSessionId))
+      .unique()
+    if (mapping == null || mapping.threadId !== args.threadId) {
+      return false
+    }
+
+    if (args.order != null) {
+      return await abortStream(ctx, agentComponent, {
+        threadId: args.threadId,
+        order: args.order,
+        reason: ABORT_REASON,
+      })
+    }
+
+    const streams = await listStreams(ctx, agentComponent, {
+      threadId: args.threadId,
+      includeStatuses: ['streaming'],
+    })
+    let aborted = false
+    for (const stream of streams) {
+      const didAbort = await abortStream(ctx, agentComponent, {
+        streamId: stream.streamId,
+        reason: ABORT_REASON,
+      })
+      aborted = didAbort || aborted
+    }
+    return aborted
   },
 })
 

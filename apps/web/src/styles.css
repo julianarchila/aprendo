@@ -430,6 +430,7 @@ pre code {
   border: 1px solid var(--border);
   background: var(--bg-inset);
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .chip-accent {
@@ -1125,6 +1126,16 @@ pre code {
 .resizable-panel-group {
   height: 100%;
   min-height: 0;
+}
+
+/* While dragging a resize handle, suppress text selection and force the
+   resize cursor across the whole document (the panels library captures the
+   pointer but doesn't manage selection). */
+[data-resizing-panels],
+[data-resizing-panels] * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  cursor: col-resize !important;
 }
 
 /* ─── Resize handle: hairline + accent glow on hover ─── */
@@ -2887,6 +2898,10 @@ pre code {
 }
 
 .stage-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -2926,8 +2941,32 @@ pre code {
   color: var(--text-tertiary);
 }
 
+/* As the stage panel narrows, the header sheds its metadata in order of
+   importance so it never wraps or overflows. Driven by the PANEL width
+   (container: stage), not the viewport. */
+@container stage (max-width: 38rem) {
+  .stage-subtopic-chip {
+    display: none;
+  }
+}
+
+@container stage (max-width: 30rem) {
+  /* Drop the remaining subject chip; the subject is still implied by context. */
+  .stage-tags {
+    display: none;
+  }
+}
+
 @container stage (max-width: 26rem) {
   .stage-score-label {
+    display: none;
+  }
+}
+
+@container stage (max-width: 21rem) {
+  /* Keep only the question counter (e.g. "3/10") in the kicker. */
+  .stage-kicker-label,
+  .stage-kicker-sep {
     display: none;
   }
 }
