@@ -6,7 +6,9 @@ import {
   useSuspenseQuery,
 } from '@tanstack/react-query'
 import { Link, createFileRoute, redirect } from '@tanstack/react-router'
+import { UploadCloud, X } from 'lucide-react'
 import { useState } from 'react'
+import type { ChangeEvent, DragEvent } from 'react'
 import { api } from '@aprendo/convex/api'
 import MarkdownBlock from '../components/MarkdownBlock.tsx'
 import { pdfUploadsQuery, questionBrowserQuery } from '../lib/pdf-queries.ts'
@@ -147,22 +149,81 @@ function AdminPage() {
 function UploadsTab() {
   const queryClient = useQueryClient()
   const { data: uploads } = useSuspenseQuery(pdfUploadsQuery(50))
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false)
+  const [uploadingFileName, setUploadingFileName] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const generateUploadUrl = useConvexMutation(api.pdfs.generatePdfUploadUrl)
   const createPdfUpload = useConvexMutation(api.pdfs.createPdfUpload)
   const retryPdfUpload = useConvexMutation(api.pdfs.retryPdfUpload)
 
+  const addSelectedFiles = (files: FileList | File[]) => {
+    const pdfFiles = Array.from(files).filter(
+      (file) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'),
+    )
+
+    if (pdfFiles.length === 0) {
+      setErrorMessage('Select or drop one or more PDF files.')
+      return
+    }
+
+    setErrorMessage(null)
+    setSelectedFiles((currentFiles) => {
+      const knownFiles = new Set(
+        currentFiles.map((file) => `${file.name}:${file.size}:${file.lastModified}`),
+      )
+      const newFiles = pdfFiles.filter(
+        (file) => !knownFiles.has(`${file.name}:${file.size}:${file.lastModified}`),
+      )
+      return [...currentFiles, ...newFiles]
+    })
+  }
+
+  const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      addSelectedFiles(event.target.files)
+    }
+    event.target.value = ''
+  }
+
+  const handleDragOver = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault()
+    setIsDraggingFiles(true)
+  }
+
+  const handleDragLeave = (event: DragEvent<HTMLLabelElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsDraggingFiles(false)
+    }
+  }
+
+  const handleDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault()
+    setIsDraggingFiles(false)
+    addSelectedFiles(event.dataTransfer.files)
+  }
+
+  const removeSelectedFile = (fileToRemove: File) => {
+    setSelectedFiles((currentFiles) =>
+      currentFiles.filter((file) => file !== fileToRemove),
+    )
+  }
+
   const uploadMutation = useMutation({
-    mutationFn: async (file: File) => {
-      return uploadPdfToConvex({ file, generateUploadUrl, createPdfUpload })
+    mutationFn: async (files: File[]) => {
+      for (const file of files) {
+        setUploadingFileName(file.name)
+        await uploadPdfToConvex({ file, generateUploadUrl, createPdfUpload })
+      }
     },
     onError: (error) => {
+      setUploadingFileName(null)
       setErrorMessage(error instanceof Error ? error.message : String(error))
     },
     onSuccess: async () => {
       setErrorMessage(null)
-      setSelectedFile(null)
+      setSelectedFiles([])
+      setUploadingFileName(null)
       await queryClient.invalidateQueries({ queryKey: pdfUploadsQuery().queryKey })
     },
   })
@@ -187,27 +248,75 @@ function UploadsTab() {
           Each upload is processed through OCR, question extraction, and enrichment.
         </p>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <label
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={[
+            'flex cursor-pointer flex-col items-center justify-center rounded-[var(--radius-md)] border border-dashed px-5 py-8 text-center transition',
+            isDraggingFiles
+              ? 'border-[var(--border-accent)] bg-[var(--accent-soft)]'
+              : 'border-[var(--border-strong)] bg-[var(--bg-inset)] hover:border-[var(--border-accent)] hover:bg-[var(--bg-card-hover)]',
+          ].join(' ')}
+        >
           <input
             type="file"
             accept="application/pdf"
-            onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-            className="block flex-1 text-sm text-[var(--text-secondary)] file:mr-3 file:rounded-[var(--radius-pill)] file:border file:border-[var(--border)] file:bg-[var(--bg-inset)] file:px-4 file:py-2 file:text-sm file:font-medium file:text-[var(--text-primary)] file:cursor-pointer"
+            multiple
+            onChange={handleFileInputChange}
+            className="sr-only"
           />
+          <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-full border border-[var(--border-accent)] bg-[var(--accent-soft)] text-[var(--accent)]">
+            <UploadCloud aria-hidden="true" size={20} />
+          </span>
+          <span className="text-sm font-semibold text-[var(--text-primary)]">
+            Drop PDF files here or click to choose
+          </span>
+          <span className="mt-1 text-xs text-[var(--text-tertiary)]">
+            Multiple PDFs are uploaded as separate processing jobs.
+          </span>
+        </label>
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-[var(--text-secondary)]">
+            {selectedFiles.length === 0
+              ? 'No PDFs selected.'
+              : `${selectedFiles.length} PDF${selectedFiles.length === 1 ? '' : 's'} selected.`}
+          </p>
           <button
             type="button"
-            disabled={selectedFile == null || uploadMutation.isPending}
-            onClick={() => selectedFile && uploadMutation.mutate(selectedFile)}
+            disabled={selectedFiles.length === 0 || uploadMutation.isPending}
+            onClick={() => uploadMutation.mutate(selectedFiles)}
             className="btn-primary"
           >
-            {uploadMutation.isPending ? 'Uploading...' : 'Upload PDF'}
+            {uploadMutation.isPending ? 'Uploading...' : 'Upload PDFs'}
           </button>
         </div>
 
-        {selectedFile ? (
-          <p className="mt-3 text-sm text-[var(--text-secondary)]">
-            Ready: <strong>{selectedFile.name}</strong> ({Math.ceil(selectedFile.size / 1024)} KB)
-          </p>
+        {selectedFiles.length > 0 ? (
+          <ul className="mt-4 space-y-2">
+            {selectedFiles.map((file) => (
+              <li
+                key={`${file.name}:${file.size}:${file.lastModified}`}
+                className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2"
+              >
+                <span className="min-w-0 text-sm text-[var(--text-secondary)]">
+                  <strong className="block truncate text-[var(--text-primary)]">{file.name}</strong>
+                  {Math.ceil(file.size / 1024)} KB
+                  {uploadingFileName === file.name ? ' · uploading' : ''}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${file.name}`}
+                  disabled={uploadMutation.isPending}
+                  onClick={() => removeSelectedFile(file)}
+                  className="btn-ghost p-2"
+                >
+                  <X aria-hidden="true" size={14} />
+                </button>
+              </li>
+            ))}
+          </ul>
         ) : null}
 
         {errorMessage ? (
