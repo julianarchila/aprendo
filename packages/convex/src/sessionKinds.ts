@@ -26,6 +26,8 @@ export type SessionKind = (typeof SESSION_KINDS)[number]
 export type SelectionStrategy =
   /** Even spread across all subjects (diagnostic, simulacro). */
   | 'balanced_by_subject'
+  /** Fixed ICFES Saber 11 simulated-exam distribution by subject/session. */
+  | 'simulacro_by_session'
   /** Rule-based selection targeting the learner's weak areas. */
   | 'recommended'
   /** Concentrated in a single requested subject. */
@@ -43,6 +45,8 @@ export interface SessionKindConfig {
   strategy: SelectionStrategy
   /** Used by `balanced_by_subject`: questions drawn per subject. */
   questionsPerSubject?: number
+  /** Used by `simulacro_by_session`: official question distribution. */
+  simulacroSessions?: SimulacroSessionConfig[]
   /** Used by `recommended` / `topic`: total questions in the session. */
   totalQuestions?: number
   eligibilityPools: QuestionEligibilityPool[]
@@ -56,6 +60,18 @@ export interface SessionKindConfig {
   launchableFromHub: boolean
   /** Whether the kind needs a `subjectId` argument (topic practice). */
   requiresSubject: boolean
+}
+
+export interface SubjectQuestionTarget {
+  subjectId: string
+  questionCount: number
+}
+
+export interface SimulacroSessionConfig {
+  sessionNumber: 1 | 2
+  labelEs: string
+  subjectTargets: SubjectQuestionTarget[]
+  timeLimitMs: number
 }
 
 const MINUTE_MS = 60_000
@@ -103,12 +119,34 @@ export const SESSION_KIND_CONFIG: Record<SessionKind, SessionKindConfig> = {
   simulacro: {
     kind: 'simulacro',
     labelEs: 'Simulacro de examen',
-    taglineEs: 'Practica como en el examen real: preguntas de todas las áreas, con tiempo.',
-    strategy: 'balanced_by_subject',
-    questionsPerSubject: 10,
+    taglineEs: 'Practica como en el examen real: dos sesiones con distribución ICFES.',
+    strategy: 'simulacro_by_session',
+    simulacroSessions: [
+      {
+        sessionNumber: 1,
+        labelEs: 'Sesión 1',
+        subjectTargets: [
+          { subjectId: 'lectura_critica', questionCount: 41 },
+          { subjectId: 'matematicas', questionCount: 25 },
+          { subjectId: 'ciencias_naturales', questionCount: 29 },
+          { subjectId: 'sociales_ciudadanas', questionCount: 25 },
+        ],
+        timeLimitMs: 4 * 60 * MINUTE_MS + 30 * MINUTE_MS,
+      },
+      {
+        sessionNumber: 2,
+        labelEs: 'Sesión 2',
+        subjectTargets: [
+          { subjectId: 'matematicas', questionCount: 25 },
+          { subjectId: 'ciencias_naturales', questionCount: 29 },
+          { subjectId: 'sociales_ciudadanas', questionCount: 25 },
+          { subjectId: 'ingles', questionCount: 55 },
+        ],
+        timeLimitMs: 4 * 60 * MINUTE_MS + 30 * MINUTE_MS,
+      },
+    ],
     eligibilityPools: ['diagnostic', 'practice_only'],
-    // 10 preguntas por área × 5 áreas = 50 preguntas. ~1.2 min por pregunta.
-    timeLimitMs: 60 * MINUTE_MS,
+    timeLimitMs: null,
     tutorInSolve: false,
     requiresDiagnostic: true,
     launchableFromHub: true,
@@ -118,6 +156,38 @@ export const SESSION_KIND_CONFIG: Record<SessionKind, SessionKindConfig> = {
 
 export function getSessionKindConfig(kind: SessionKind): SessionKindConfig {
   return SESSION_KIND_CONFIG[kind]
+}
+
+export function getConfiguredQuestionCount(config: SessionKindConfig): number {
+  if (config.totalQuestions != null) return config.totalQuestions
+  if (config.questionsPerSubject != null) return config.questionsPerSubject * 5
+  if (config.simulacroSessions != null) {
+    return config.simulacroSessions.reduce(
+      (sum, session) =>
+        sum + session.subjectTargets.reduce(
+          (sessionSum, target) => sessionSum + target.questionCount,
+          0,
+        ),
+      0,
+    )
+  }
+  return 0
+}
+
+export function getSimulacroSessionQuestionCount(session: SimulacroSessionConfig): number {
+  return session.subjectTargets.reduce((sum, target) => sum + target.questionCount, 0)
+}
+
+export function getSimulacroSubjectTargets(config = SESSION_KIND_CONFIG.simulacro) {
+  const totals = new Map<string, number>()
+  for (const session of config.simulacroSessions ?? []) {
+    for (const target of session.subjectTargets) {
+      totals.set(target.subjectId, (totals.get(target.subjectId) ?? 0) + target.questionCount)
+    }
+  }
+  return [...totals.entries()]
+    .map(([subjectId, questionCount]) => ({ subjectId, questionCount }))
+    .sort((a, b) => a.subjectId.localeCompare(b.subjectId))
 }
 
 /** Kinds the student can start from the practice hub, in display order. */

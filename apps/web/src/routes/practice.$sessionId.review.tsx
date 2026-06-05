@@ -376,6 +376,7 @@ function ReviewPage() {
   }
 
   const correctCount = questions.filter((q) => q.attempt?.isCorrect).length
+  const subjectScores = sessionDoc.summary?.subjectScores ?? []
   const selectedOption = currentQuestion.attempt?.selectedOption ?? null
   const hasAnswered = selectedOption != null
   const isFirst = currentIndex === 0
@@ -458,6 +459,16 @@ function ReviewPage() {
           <span className="stage-score-label">correctas</span>
         </span>
       </header>
+
+      {subjectScores.length > 0 ? (
+        <div className="stage-score-strip" aria-label="Puntaje por área">
+          {subjectScores.map((score) => (
+            <span key={score.subjectId} className="chip">
+              {getSubjectLabel(score.subjectId)}: <strong>{score.score}</strong>/100
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       <nav className="stage-palette" aria-label="Mapa de preguntas">
         {questions.map((question, index) => {

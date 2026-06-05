@@ -7,6 +7,8 @@ import { api } from '@aprendo/convex/api'
 import {
   LAUNCHABLE_SESSION_KINDS,
   SESSION_KIND_CONFIG,
+  getConfiguredQuestionCount,
+  getSimulacroSessionQuestionCount,
   type SessionKind,
 } from '@aprendo/convex/sessionKinds'
 import { StudentAppShell } from '../components/StudentAppShell.tsx'
@@ -31,6 +33,7 @@ type SessionRow = {
   startedAt: number
   questionCount: number
   summary?: { correctCount: number; questionCount: number; accuracy: number } | null
+  simulacroSessionNumber?: number
 }
 
 const FILTERS: Array<{ value: 'all' | SessionKind; label: string }> = [
@@ -60,12 +63,19 @@ function PracticeHubPage() {
 
   const createSession = useConvexMutation(api.sessions.createSession)
   const startMutation = useMutation({
-    mutationFn: async (input: { kind: SessionKind; subjectId?: string }) => {
+    mutationFn: async (input: {
+      kind: SessionKind
+      subjectId?: string
+      simulacroSessionNumber?: number
+    }) => {
       if (session == null) throw new Error('No has iniciado sesión.')
       return createSession({
         studentId: session.studentId,
         kind: input.kind,
         ...(input.subjectId != null ? { subjectId: input.subjectId } : {}),
+        ...(input.simulacroSessionNumber != null
+          ? { simulacroSessionNumber: input.simulacroSessionNumber }
+          : {}),
       })
     },
     onSuccess: async (sessionId) => {
@@ -128,7 +138,7 @@ function PracticeHubPage() {
                   className="launch-card-main"
                   disabled={startMutation.isPending}
                   onClick={() => {
-                    if (config.requiresSubject) {
+                    if (config.requiresSubject || config.simulacroSessions != null) {
                       setExpandedKind((prev) => (prev === kind ? null : kind))
                     } else {
                       startMutation.mutate({ kind })
@@ -143,9 +153,9 @@ function PracticeHubPage() {
                     <span className="launch-card-copy">{config.taglineEs}</span>
                     <span className="launch-card-meta">
                       <span>
-                        {config.strategy === 'balanced_by_subject'
-                          ? `${(config.questionsPerSubject ?? 0) * subjectIds.length} preguntas`
-                          : `${config.totalQuestions ?? 0} preguntas`}
+                        {config.simulacroSessions != null
+                          ? `${getConfiguredQuestionCount(config)} preguntas en 2 sesiones`
+                          : `${getConfiguredQuestionCount(config)} preguntas`}
                       </span>
                       {config.timeLimitMs != null ? (
                         <span className="launch-card-meta-time">
@@ -155,9 +165,31 @@ function PracticeHubPage() {
                     </span>
                   </span>
                   <span className="launch-card-cta" aria-hidden>
-                    {config.requiresSubject ? <ChevronRight size={18} /> : isStarting ? '…' : <Play size={16} />}
+                    {config.requiresSubject || config.simulacroSessions != null
+                      ? <ChevronRight size={18} />
+                      : isStarting ? '…' : <Play size={16} />}
                   </span>
                 </button>
+
+                {config.simulacroSessions != null && isExpanded ? (
+                  <div className="topic-picker" role="group" aria-label="Elige una sesión del simulacro">
+                    {config.simulacroSessions.map((simulacroSession) => (
+                      <button
+                        key={simulacroSession.sessionNumber}
+                        type="button"
+                        className="topic-chip"
+                        disabled={startMutation.isPending}
+                        onClick={() =>
+                          startMutation.mutate({
+                            kind,
+                            simulacroSessionNumber: simulacroSession.sessionNumber,
+                          })}
+                      >
+                        {simulacroSession.labelEs} · {getSimulacroSessionQuestionCount(simulacroSession)} preguntas · {formatTimeLimit(simulacroSession.timeLimitMs)}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
 
                 {config.requiresSubject && isExpanded ? (
                   <div className="topic-picker" role="group" aria-label="Elige una asignatura">
@@ -205,6 +237,9 @@ function PracticeHubPage() {
                     <strong>{SESSION_KIND_CONFIG[s.kind].labelEs} en curso</strong>
                     <small>
                       {s.subjectId != null ? `${getSubjectLabel(s.subjectId)} · ` : ''}
+                      {s.kind === 'simulacro' && s.simulacroSessionNumber != null
+                        ? `Sesión ${s.simulacroSessionNumber} · `
+                        : ''}
                       {s.questionCount} preguntas
                     </small>
                   </span>
@@ -259,6 +294,9 @@ function PracticeHubPage() {
                     <span className="min-w-0 flex-1">
                       <strong>
                         {SESSION_KIND_CONFIG[s.kind].labelEs}
+                        {s.kind === 'simulacro' && s.simulacroSessionNumber != null
+                          ? ` · Sesión ${s.simulacroSessionNumber}`
+                          : ''}
                         {s.subjectId != null ? ` · ${getSubjectLabel(s.subjectId)}` : ''}
                       </strong>
                       <small>{formatSessionDate(s.startedAt)}</small>

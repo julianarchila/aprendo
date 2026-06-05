@@ -1259,6 +1259,22 @@ pre code {
   display: none;
 }
 
+.stage-score-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1.1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  background: color-mix(in srgb, var(--bg-inset) 55%, transparent);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.stage-score-strip::-webkit-scrollbar {
+  display: none;
+}
+
 .palette-dot {
   --dot-bg: var(--bg-inset);
   --dot-border: var(--border);

@@ -4,10 +4,13 @@ import { v } from 'convex/values'
 import type { Doc, Id } from './_generated/dataModel'
 import taxonomyContract from '../../../docs/taxonomy.v1.json'
 import {
+  getSimulacroSubjectTargets,
   getSessionKindConfig,
   type QuestionEligibilityPool,
   type SessionKind,
   type SessionKindConfig,
+  type SimulacroSessionConfig,
+  type SubjectQuestionTarget,
 } from './sessionKinds'
 import { sessionKindValidator } from './validators'
 
@@ -103,6 +106,61 @@ async function selectBalancedBySubject(
   }
 
   return selected
+}
+
+async function selectSubjectTargets(
+  ctx: QueryCtx,
+  config: SessionKindConfig,
+  subjectTargets: SubjectQuestionTarget[],
+  reason: SelectionReason,
+): Promise<Selection[]> {
+  const selected: Selection[] = []
+
+  for (const target of subjectTargets) {
+    const pooled: Doc<'questions'>[] = []
+    for (const pool of config.eligibilityPools) {
+      const rows = await ctx.db
+        .query('questions')
+        .withIndex('by_subjectId_eligibility', (q) =>
+          q.eq('subjectId', target.subjectId).eq('eligibility', pool),
+        )
+        .collect()
+      pooled.push(...rows)
+    }
+    const usable = stableQuestionOrder(pooled.filter(hasUsableMetadata)).slice(0, target.questionCount)
+    for (const question of usable) {
+      selected.push({
+        questionId: question._id,
+        selectionReason: reason,
+        selectionMetadata: target.subjectId,
+      })
+    }
+  }
+
+  return selected
+}
+
+function getSimulacroSessionConfig(
+  config: SessionKindConfig,
+  sessionNumber: number | undefined,
+): SimulacroSessionConfig {
+  const sessions = config.simulacroSessions ?? []
+  const targetSessionNumber = sessionNumber ?? 1
+  const simulacroSession = sessions.find(
+    (candidate) => candidate.sessionNumber === targetSessionNumber,
+  )
+  if (simulacroSession == null) {
+    throw new Error('Selecciona una sesión válida del simulacro.')
+  }
+  return simulacroSession
+}
+
+function getSessionTimeLimitMs(
+  config: SessionKindConfig,
+  simulacroSessionNumber: number | undefined,
+) {
+  if (config.kind !== 'simulacro') return config.timeLimitMs
+  return getSimulacroSessionConfig(config, simulacroSessionNumber).timeLimitMs
 }
 
 /** Heavily concentrated in a single requested subject (topic practice). */
@@ -240,10 +298,20 @@ async function buildSelection(
   config: SessionKindConfig,
   studentId: Id<'students'>,
   subjectId: string | undefined,
+  simulacroSessionNumber: number | undefined,
 ): Promise<Selection[]> {
   switch (config.strategy) {
     case 'balanced_by_subject':
       return selectBalancedBySubject(ctx, config)
+    case 'simulacro_by_session': {
+      const simulacroSession = getSimulacroSessionConfig(config, simulacroSessionNumber)
+      return selectSubjectTargets(
+        ctx,
+        config,
+        simulacroSession.subjectTargets,
+        'balanced_coverage',
+      )
+    }
     case 'topic':
       if (subjectId == null) throw new Error('Topic practice requires a subject.')
       return selectTopic(ctx, config, studentId, subjectId)
@@ -263,9 +331,11 @@ export const createSession = mutation({
     studentId: v.id('students'),
     kind: sessionKindValidator,
     subjectId: v.optional(v.string()),
+    simulacroSessionNumber: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const config = getSessionKindConfig(args.kind)
+    const timeLimitMs = getSessionTimeLimitMs(config, args.simulacroSessionNumber)
 
     if (config.requiresDiagnostic && !(await hasCompletedDiagnostic(ctx, args.studentId))) {
       throw new Error('Completa el diagnóstico antes de iniciar esta práctica.')
@@ -286,13 +356,22 @@ export const createSession = mutation({
       )
       .collect()
     const reusable = active.find(
-      (session) => args.kind !== 'topic' || session.subjectId === args.subjectId,
+      (session) =>
+        (args.kind !== 'topic' || session.subjectId === args.subjectId)
+        && (args.kind !== 'simulacro'
+          || session.simulacroSessionNumber === (args.simulacroSessionNumber ?? 1)),
     )
     if (reusable) {
       return reusable._id
     }
 
-    const selected = await buildSelection(ctx, config, args.studentId, args.subjectId)
+    const selected = await buildSelection(
+      ctx,
+      config,
+      args.studentId,
+      args.subjectId,
+      args.simulacroSessionNumber,
+    )
     if (selected.length === 0) {
       throw new Error('No hay preguntas disponibles para esta práctica.')
     }
@@ -304,9 +383,12 @@ export const createSession = mutation({
       status: 'in_progress',
       recommendationSource: recommendationSourceForKind(args.kind),
       subjectId: config.requiresSubject ? args.subjectId : undefined,
+      simulacroSessionNumber: args.kind === 'simulacro'
+        ? (args.simulacroSessionNumber ?? 1)
+        : undefined,
       startedAt: now,
-      timeLimitMs: config.timeLimitMs ?? undefined,
-      expiresAt: config.timeLimitMs != null ? now + config.timeLimitMs : undefined,
+      timeLimitMs: timeLimitMs ?? undefined,
+      expiresAt: timeLimitMs != null ? now + timeLimitMs : undefined,
       questionCount: selected.length,
       currentPosition: 1,
     })
@@ -381,6 +463,66 @@ export const getLatestDiagnostic = query({
     return sessions
       .filter((session) => session.status === 'completed')
       .sort((a, b) => (b.completedAt ?? b.startedAt) - (a.completedAt ?? a.startedAt))[0] ?? null
+  },
+})
+
+export const getLatestSimulacroScore = query({
+  args: {
+    studentId: v.id('students'),
+  },
+  handler: async (ctx, args) => {
+    const sessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_studentId_kind', (q) =>
+        q.eq('studentId', args.studentId).eq('kind', 'simulacro'),
+      )
+      .collect()
+    const completed = sessions
+      .filter((session) => session.status === 'completed' && session.summary != null)
+      .sort((a, b) => (b.completedAt ?? b.startedAt) - (a.completedAt ?? a.startedAt))
+
+    const latestBySessionNumber = new Map<number, Doc<'sessions'>>()
+    for (const session of completed) {
+      const sessionNumber = session.simulacroSessionNumber ?? 1
+      if (!latestBySessionNumber.has(sessionNumber)) {
+        latestBySessionNumber.set(sessionNumber, session)
+      }
+    }
+
+    const subjectTotals = getSimulacroSubjectTargets()
+    const scoreBuckets = new Map<string, { correctCount: number; answeredCount: number }>()
+    for (const session of latestBySessionNumber.values()) {
+      for (const score of session.summary?.subjectScores ?? []) {
+        const bucket = scoreBuckets.get(score.subjectId) ?? {
+          correctCount: 0,
+          answeredCount: 0,
+        }
+        bucket.correctCount += score.correctCount
+        bucket.answeredCount += score.answeredCount
+        scoreBuckets.set(score.subjectId, bucket)
+      }
+    }
+
+    const subjectScores = subjectTotals.map((target) => {
+      const bucket = scoreBuckets.get(target.subjectId) ?? {
+        correctCount: 0,
+        answeredCount: 0,
+      }
+      return {
+        subjectId: target.subjectId,
+        correctCount: bucket.correctCount,
+        answeredCount: bucket.answeredCount,
+        questionCount: target.questionCount,
+        score: Math.round((bucket.correctCount / target.questionCount) * 100),
+      }
+    })
+
+    return {
+      isComplete: latestBySessionNumber.has(1) && latestBySessionNumber.has(2),
+      completedSessionNumbers: [...latestBySessionNumber.keys()].sort(),
+      questionCount: subjectTotals.reduce((sum, target) => sum + target.questionCount, 0),
+      subjectScores,
+    }
   },
 })
 
@@ -558,6 +700,16 @@ export const completeSession = mutation({
       .query('questionAttempts')
       .withIndex('by_sessionId', (q) => q.eq('sessionId', args.sessionId))
       .collect()
+    const sessionQuestions = await ctx.db
+      .query('sessionQuestions')
+      .withIndex('by_sessionId_position', (q) => q.eq('sessionId', args.sessionId))
+      .collect()
+    const questions = await Promise.all(
+      sessionQuestions.map((sessionQuestion) => ctx.db.get(sessionQuestion.questionId)),
+    )
+    const attemptBySessionQuestionId = new Map(
+      attempts.map((attempt) => [attempt.sessionQuestionId, attempt]),
+    )
     const answeredAttempts = attempts.filter((attempt) => attempt.isCorrect != null)
     const correctCount = answeredAttempts.filter((attempt) => attempt.isCorrect).length
     const answeredCount = answeredAttempts.length
@@ -568,12 +720,47 @@ export const completeSession = mutation({
       ? Math.min(rawDurationMs, session.timeLimitMs)
       : rawDurationMs
 
+    const subjectBuckets = new Map<
+      string,
+      { correctCount: number; answeredCount: number; questionCount: number }
+    >()
+    sessionQuestions.forEach((sessionQuestion, index) => {
+      const question = questions[index]
+      if (question?.subjectId == null) return
+      const bucket = subjectBuckets.get(question.subjectId) ?? {
+        correctCount: 0,
+        answeredCount: 0,
+        questionCount: 0,
+      }
+      const attempt = attemptBySessionQuestionId.get(sessionQuestion._id)
+      bucket.questionCount += 1
+      if (attempt?.isCorrect != null) {
+        bucket.answeredCount += 1
+      }
+      if (attempt?.isCorrect === true) {
+        bucket.correctCount += 1
+      }
+      subjectBuckets.set(question.subjectId, bucket)
+    })
+    const subjectScores = [...subjectBuckets.entries()]
+      .map(([subjectId, bucket]) => ({
+        subjectId,
+        correctCount: bucket.correctCount,
+        answeredCount: bucket.answeredCount,
+        questionCount: bucket.questionCount,
+        score: bucket.questionCount === 0
+          ? 0
+          : Math.round((bucket.correctCount / bucket.questionCount) * 100),
+      }))
+      .sort((a, b) => a.subjectId.localeCompare(b.subjectId))
+
     const summary = {
       correctCount,
       answeredCount,
       questionCount: session.questionCount,
       accuracy: session.questionCount === 0 ? 0 : correctCount / session.questionCount,
       durationMs,
+      subjectScores,
     }
 
     await ctx.db.patch(args.sessionId, {
@@ -599,5 +786,6 @@ function summarize(session: Doc<'sessions'>) {
     questionCount: session.questionCount,
     accuracy: session.summary?.accuracy ?? 0,
     durationMs: session.summary?.durationMs ?? 0,
+    subjectScores: session.summary?.subjectScores ?? [],
   }
 }

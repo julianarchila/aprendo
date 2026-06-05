@@ -113,6 +113,13 @@ export const studentSummaryValidator = v.object({
   questionCount: v.number(),
   accuracy: v.number(),
   durationMs: v.number(),
+  subjectScores: v.optional(v.array(v.object({
+    subjectId: v.string(),
+    correctCount: v.number(),
+    answeredCount: v.number(),
+    questionCount: v.number(),
+    score: v.number(),
+  }))),
 })
 
 export const sessionDocumentValidator = v.object({
@@ -122,6 +129,8 @@ export const sessionDocumentValidator = v.object({
   recommendationSource: recommendationSourceValidator,
   // Only set for `topic` sessions — the subject the student chose.
   subjectId: v.optional(v.string()),
+  // Only set for simulated exam sessions.
+  simulacroSessionNumber: v.optional(v.number()),
   startedAt: v.number(),
   completedAt: v.optional(v.number()),
   // Snapshot of the kind's time limit at creation, or absent for untimed kinds.
