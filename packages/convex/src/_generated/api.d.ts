@@ -8,16 +8,25 @@
  * @module
  */
 
+import type * as aiCache from "../aiCache.js";
 import type * as auth from "../auth.js";
+import type * as coach from "../coach.js";
+import type * as colombiaTime from "../colombiaTime.js";
+import type * as generatedQuestions from "../generatedQuestions.js";
 import type * as http from "../http.js";
+import type * as lessons from "../lessons.js";
 import type * as migrations from "../migrations.js";
 import type * as myFunctions from "../myFunctions.js";
 import type * as pdfPipeline from "../pdfPipeline.js";
 import type * as pdfs from "../pdfs.js";
 import type * as progress from "../progress.js";
+import type * as questionPool from "../questionPool.js";
 import type * as sessionKinds from "../sessionKinds.js";
 import type * as sessions from "../sessions.js";
 import type * as students from "../students.js";
+import type * as syllabus from "../syllabus.js";
+import type * as taxonomy from "../taxonomy.js";
+import type * as today from "../today.js";
 import type * as tutor from "../tutor.js";
 import type * as validators from "../validators.js";
 
@@ -28,16 +37,25 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  aiCache: typeof aiCache;
   auth: typeof auth;
+  coach: typeof coach;
+  colombiaTime: typeof colombiaTime;
+  generatedQuestions: typeof generatedQuestions;
   http: typeof http;
+  lessons: typeof lessons;
   migrations: typeof migrations;
   myFunctions: typeof myFunctions;
   pdfPipeline: typeof pdfPipeline;
   pdfs: typeof pdfs;
   progress: typeof progress;
+  questionPool: typeof questionPool;
   sessionKinds: typeof sessionKinds;
   sessions: typeof sessions;
   students: typeof students;
+  syllabus: typeof syllabus;
+  taxonomy: typeof taxonomy;
+  today: typeof today;
   tutor: typeof tutor;
   validators: typeof validators;
 }>;

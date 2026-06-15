@@ -1,5 +1,7 @@
 import { internalMutation, query } from './_generated/server'
 import { v } from 'convex/values'
+import { assertOwnsStudent } from './auth'
+import { colombiaDayNumber, colombiaWeekIndex, colombiaWeekStartMs } from './colombiaTime'
 
 const RECENT_WINDOW_SIZE = 5
 
@@ -304,6 +306,63 @@ export const getStudentProgress = query({
       weakestSubtopics: [...subtopicAggregates]
         .sort((a, b) => a.masteryScore - b.masteryScore)
         .slice(0, 8),
+    }
+  },
+})
+
+/**
+ * The improvement story over time, derived from raw attempts (no stored state):
+ * a weekly accuracy series for the trend chart plus lifetime activity totals.
+ * Kept separate from `getStudentProgress` (which reads only aggregates and is
+ * also used by the "Hoy" page) so that page doesn't pay for this attempts scan.
+ */
+export const getProgressTrends = query({
+  args: {
+    studentId: v.id('students'),
+  },
+  handler: async (ctx, args) => {
+    await assertOwnsStudent(ctx, args.studentId)
+
+    const attempts = await ctx.db
+      .query('questionAttempts')
+      .withIndex('by_studentId', (q) => q.eq('studentId', args.studentId))
+      .collect()
+
+    const weekBuckets = new Map<number, { attempts: number; correct: number }>()
+    const activeDays = new Set<number>()
+    let totalAttempts = 0
+    let totalCorrect = 0
+    let firstActivityAt: number | null = null
+
+    for (const attempt of attempts) {
+      if (attempt.answeredAt == null || attempt.isCorrect == null) continue
+      const answeredAt = attempt.answeredAt
+      totalAttempts += 1
+      if (attempt.isCorrect) totalCorrect += 1
+      activeDays.add(colombiaDayNumber(answeredAt))
+      if (firstActivityAt == null || answeredAt < firstActivityAt) firstActivityAt = answeredAt
+
+      const weekIndex = colombiaWeekIndex(answeredAt)
+      const bucket = weekBuckets.get(weekIndex) ?? { attempts: 0, correct: 0 }
+      bucket.attempts += 1
+      if (attempt.isCorrect) bucket.correct += 1
+      weekBuckets.set(weekIndex, bucket)
+    }
+
+    const weekly = [...weekBuckets.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([weekIndex, bucket]) => ({
+        weekStartMs: colombiaWeekStartMs(weekIndex),
+        attempts: bucket.attempts,
+        accuracy: bucket.attempts === 0 ? 0 : bucket.correct / bucket.attempts,
+      }))
+
+    return {
+      weekly,
+      totalAttempts,
+      totalCorrect,
+      activeDays: activeDays.size,
+      firstActivityAt,
     }
   },
 })

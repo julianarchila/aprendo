@@ -58,6 +58,6 @@ async function computeStudentAppState(ctx: QueryCtx, studentId: Id<'students'>) 
     hasCompletedDiagnostic: latestCompletedDiagnostic != null,
     activeDiagnosticSessionId: activeDiagnostic?._id ?? null,
     latestCompletedDiagnosticId: latestCompletedDiagnostic?._id ?? null,
-    defaultRoute: latestCompletedDiagnostic != null ? '/practice' as const : '/diagnostic' as const,
+    defaultRoute: latestCompletedDiagnostic != null ? '/today' as const : '/diagnostic' as const,
   }
 }

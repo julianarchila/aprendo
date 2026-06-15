@@ -99,3 +99,67 @@ export function studentProgressQuery(studentId: string | null | undefined) {
     studentId: studentId as never,
   })
 }
+
+/** Improvement-over-time signals: weekly accuracy trend + activity totals. */
+export function progressTrendsQuery(studentId: string | null | undefined) {
+  if (!hasValue(studentId)) {
+    return convexQuery(api.progress.getProgressTrends, 'skip')
+  }
+
+  return convexQuery(api.progress.getProgressTrends, {
+    studentId: studentId as never,
+  })
+}
+
+/** This week's AI coach summary (null until requested/generated). */
+export function coachSummaryQuery(studentId: string | null | undefined) {
+  if (!hasValue(studentId)) {
+    return convexQuery(api.coach.getWeeklyCoachSummary, 'skip')
+  }
+
+  return convexQuery(api.coach.getWeeklyCoachSummary, {
+    studentId: studentId as never,
+  })
+}
+
+/** Count of previously-missed questions due for spaced review (repaso). */
+export function reviewQueueQuery(studentId: string | null | undefined) {
+  if (!hasValue(studentId)) {
+    return convexQuery(api.sessions.getReviewQueue, 'skip')
+  }
+
+  return convexQuery(api.sessions.getReviewQueue, {
+    studentId: studentId as never,
+  })
+}
+
+/** "Hoy" dashboard signals (streak + weekly activity) derived from attempts. */
+export function todayDashboardQuery(studentId: string | null | undefined) {
+  if (!hasValue(studentId)) {
+    return convexQuery(api.today.getTodayDashboard, 'skip')
+  }
+
+  return convexQuery(api.today.getTodayDashboard, {
+    studentId: studentId as never,
+  })
+}
+
+/** Navigable ICFES syllabus: taxonomy + question counts + per-node mastery. */
+export function syllabusQuery(studentId: string | null | undefined) {
+  if (!hasValue(studentId)) {
+    return convexQuery(api.syllabus.getSyllabus, 'skip')
+  }
+
+  return convexQuery(api.syllabus.getSyllabus, {
+    studentId: studentId as never,
+  })
+}
+
+/** Cached AI concept lesson for a subtopic (null until requested/generated). */
+export function conceptLessonQuery(subtopicId: string | null | undefined) {
+  if (!hasValue(subtopicId)) {
+    return convexQuery(api.lessons.getConceptLesson, 'skip')
+  }
+
+  return convexQuery(api.lessons.getConceptLesson, { subtopicId })
+}

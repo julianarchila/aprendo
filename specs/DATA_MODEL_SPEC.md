@@ -112,6 +112,10 @@ Optional future fields:
 - `dedupeClusterId`
 - `difficultyBand`
 
+AI-generated questions:
+
+- Questions authored by AI (subtopic generation) are stored as ordinary `Question` rows with `eligibility = practice_only`, full taxonomy, and a completed answer/solution. They are attached to a single synthetic "AI generated" `PdfUpload` (slug `ai-generated`) so they need no schema change and flow through the normal selection, session, and review machinery.
+
 ### QuestionOption
 
 Embedded inside `Question`.
@@ -223,9 +227,12 @@ Key fields:
 
 - `id`
 - `studentId`
-- `type` (`diagnostic`, `practice`, `review`)
+- `kind` (`diagnostic`, `recommended`, `topic`, `simulacro`, `repaso`) — review is a stage of any kind, not a separate kind. `repaso` resurfaces previously-missed questions for spaced review
 - `status` (`created`, `in_progress`, `completed`, `abandoned`)
 - `recommendationSource` (`diagnostic_plan`, `rule_based`, `review_mistakes`, `manual`)
+- `subjectId` — only set for `topic` sessions (the chosen subject)
+- `subtopicId` — only set for `topic` sessions launched from the syllabus (the chosen subtopic; narrows selection to that subtopic)
+- `simulacroSessionNumber` — only set for `simulacro` sessions
 - `startedAt`
 - `completedAt`
 - `questionCount`
@@ -246,8 +253,8 @@ Key fields:
 - `sessionId`
 - `questionId`
 - `position`
-- `selectionReason` (`balanced_diagnostic`, `weak_subtopic`, `recent_mistake`, `reinforcement`, `confidence_building`)
-- `selectionMetadata`
+- `selectionReason` (`balanced_diagnostic`, `balanced_coverage`, `weak_subtopic`, `recent_mistake`, `reinforcement`, `confidence_building`, `topic_focus`)
+- `selectionMetadata` — the subject id, or the subtopic id for syllabus-launched subtopic practice
 
 ### QuestionAttempt
 
@@ -390,6 +397,50 @@ Key fields:
 - `createdAt`
 - `messageType` (`hint`, `explanation`, `follow_up`, `general_help`)
 
+## 6. Generated Content Domain
+
+### ConceptLesson
+
+Represents an AI-generated lesson for one taxonomy subtopic, cached globally (not per student).
+
+Responsibilities:
+
+- cache generated teaching content so it is produced once and reused
+- model the generation lifecycle so concurrent requests don't duplicate work
+
+Key fields:
+
+- `subtopicId` (cache key; one lesson per subtopic)
+- `subjectId` (derived parent subject)
+- `status` (`generating`, `ready`, `failed`)
+- `stage` (optional sub-step while `generating`: `writing` text, then `demo`; cleared when settled) — surfaced over the reactive socket so the client shows explicit progress
+- `ideaBody` (markdown — the explanation that teaches the concept, Khan-Academy style)
+- `demoHtml` (optional interactive demo, stored as a **body fragment** that the client themes; see ARCHITECTURE §5)
+- `modelId`, `promptVersion` (provenance + cache invalidation)
+- `generatedAt`, `failureReason`, `createdAt`, `updatedAt`
+
+V1 notes:
+
+- Generation is claimed atomically via the `status` field (a serializable mutation flips `generating`), so concurrent viewers of the same subtopic trigger a single generation. The claim/regeneration policy is the shared `decideClaim` (`aiCache.ts`).
+- Generation runs in two phases that each patch the row, so progress streams to the client over Convex's socket: phase 1 writes the text sections (status stays `generating`, `stage` → `demo`); phase 2 builds the optional demo, then `status` → `ready`. A demo failure still publishes the lesson with its text (the demo is optional).
+- `promptVersion` lets a prompt/model change invalidate and regenerate stale lessons.
+
+### CoachSummary
+
+Represents a cached, AI-generated weekly summary for one student and one week.
+
+Key fields:
+
+- `studentId`
+- `weekIndex` (Colombia-time week bucket; cache key with `studentId`)
+- `status` (`generating`, `ready`, `failed`)
+- `body` (short markdown summary)
+- `modelId`, `promptVersion`, `generatedAt`, `failureReason`, `createdAt`, `updatedAt`
+
+V1 notes:
+
+- Same atomic-claim generation lifecycle as `ConceptLesson`; generated on demand only when the student has activity that week.
+
 ## Canonical Relationships
 
 - one `PdfUpload` has many `Question`
@@ -413,6 +464,8 @@ The system should support these read patterns efficiently:
 - fetch completed attempts for a session
 - fetch subject and subtopic progress for a student
 - fetch candidate question pools for recommendation
+- fetch the navigable syllabus for a student: the taxonomy tree joined with per-node launchable-question counts and per-node mastery (a read-only join, not a stored entity)
+- fetch the cached concept lesson for a subtopic (and request on-demand generation when absent)
 
 ## Versioning Requirements
 

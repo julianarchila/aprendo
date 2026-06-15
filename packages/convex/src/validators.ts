@@ -72,6 +72,7 @@ export const sessionKindValidator = v.union(
   v.literal('recommended'),
   v.literal('topic'),
   v.literal('simulacro'),
+  v.literal('repaso'),
 )
 
 // Compile-time guard: keep the validator literals in sync with SESSION_KINDS.
@@ -129,6 +130,8 @@ export const sessionDocumentValidator = v.object({
   recommendationSource: recommendationSourceValidator,
   // Only set for `topic` sessions — the subject the student chose.
   subjectId: v.optional(v.string()),
+  // Only set for `topic` sessions launched from the syllabus — the chosen subtopic.
+  subtopicId: v.optional(v.string()),
   // Only set for simulated exam sessions.
   simulacroSessionNumber: v.optional(v.number()),
   startedAt: v.number(),
@@ -157,6 +160,69 @@ export const questionAttemptValidator = v.object({
   hintCount: v.number(),
   tutorMessageCount: v.number(),
   wasSkipped: v.boolean(),
+})
+
+export const conceptLessonStatusValidator = v.union(
+  v.literal('generating'),
+  v.literal('ready'),
+  v.literal('failed'),
+)
+
+/**
+ * Sub-step within `status: 'generating'`, surfaced to the client so the loading
+ * UI can be explicit: `writing` = drafting the text sections; `demo` = text is
+ * ready and an interactive demo is being built.
+ */
+export const conceptLessonStageValidator = v.union(
+  v.literal('writing'),
+  v.literal('demo'),
+)
+
+/**
+ * A cached, AI-generated concept lesson for one taxonomy subtopic. Global (not
+ * per student) — keyed by `subtopicId`. The lesson teaches the concept itself
+ * (Khan-Academy style): a written explanation plus an optional interactive demo.
+ */
+export const conceptLessonDocumentValidator = v.object({
+  subtopicId: v.string(),
+  subjectId: v.string(),
+  status: conceptLessonStatusValidator,
+  // Progress sub-step while `status === 'generating'` (cleared when settled).
+  stage: v.optional(conceptLessonStageValidator),
+  // The explanation that teaches the concept — markdown (may contain LaTeX).
+  ideaBody: v.optional(v.string()),
+  // Optional self-contained interactive demo (rendered in a sandboxed iframe).
+  demoHtml: v.optional(v.string()),
+  modelId: v.string(),
+  promptVersion: v.string(),
+  generatedAt: v.optional(v.number()),
+  failureReason: v.optional(v.string()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+})
+
+export const coachSummaryStatusValidator = v.union(
+  v.literal('generating'),
+  v.literal('ready'),
+  v.literal('failed'),
+)
+
+/**
+ * A cached, AI-generated weekly coach summary for one student and one week.
+ * Keyed by `(studentId, weekIndex)` where weekIndex is the Colombia-time week.
+ */
+export const coachSummaryDocumentValidator = v.object({
+  studentId: v.id('students'),
+  weekIndex: v.number(),
+  status: coachSummaryStatusValidator,
+  // Short markdown summary of the week's progress.
+  body: v.optional(v.string()),
+  modelId: v.string(),
+  promptVersion: v.string(),
+  generatedAt: v.optional(v.number()),
+  failureReason: v.optional(v.string()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
 })
 
 export const learnerAggregateValidator = v.object({

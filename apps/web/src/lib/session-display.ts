@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Sparkles, Timer, type LucideIcon } from 'lucide-react'
+import { Activity, BookOpen, RotateCcw, Sparkles, Timer, type LucideIcon } from 'lucide-react'
 import { SESSION_KIND_CONFIG, type SessionKind } from '@aprendo/convex/sessionKinds'
 
 const KIND_ICON: Record<SessionKind, LucideIcon> = {
@@ -6,6 +6,7 @@ const KIND_ICON: Record<SessionKind, LucideIcon> = {
   recommended: Sparkles,
   topic: BookOpen,
   simulacro: Timer,
+  repaso: RotateCcw,
 }
 
 export function getKindIcon(kind: SessionKind): LucideIcon {

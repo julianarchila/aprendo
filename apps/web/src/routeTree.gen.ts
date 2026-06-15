@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TodayRouteImport } from './routes/today'
+import { Route as SyllabusRouteImport } from './routes/syllabus'
 import { Route as ProgressRouteImport } from './routes/progress'
 import { Route as PracticeRouteImport } from './routes/practice'
 import { Route as LoginRouteImport } from './routes/login'
@@ -18,9 +20,20 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PracticeSessionIdRouteImport } from './routes/practice.$sessionId'
+import { Route as LessonSubtopicIdRouteImport } from './routes/lesson.$subtopicId'
 import { Route as PracticeSessionIdReviewRouteImport } from './routes/practice.$sessionId.review'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
+const TodayRoute = TodayRouteImport.update({
+  id: '/today',
+  path: '/today',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SyllabusRoute = SyllabusRouteImport.update({
+  id: '/syllabus',
+  path: '/syllabus',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProgressRoute = ProgressRouteImport.update({
   id: '/progress',
   path: '/progress',
@@ -66,6 +79,11 @@ const PracticeSessionIdRoute = PracticeSessionIdRouteImport.update({
   path: '/$sessionId',
   getParentRoute: () => PracticeRoute,
 } as any)
+const LessonSubtopicIdRoute = LessonSubtopicIdRouteImport.update({
+  id: '/lesson/$subtopicId',
+  path: '/lesson/$subtopicId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PracticeSessionIdReviewRoute = PracticeSessionIdReviewRouteImport.update({
   id: '/review',
   path: '/review',
@@ -86,6 +104,9 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/practice': typeof PracticeRouteWithChildren
   '/progress': typeof ProgressRoute
+  '/syllabus': typeof SyllabusRoute
+  '/today': typeof TodayRoute
+  '/lesson/$subtopicId': typeof LessonSubtopicIdRoute
   '/practice/$sessionId': typeof PracticeSessionIdRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/practice/$sessionId/review': typeof PracticeSessionIdReviewRoute
@@ -99,6 +120,9 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/practice': typeof PracticeRouteWithChildren
   '/progress': typeof ProgressRoute
+  '/syllabus': typeof SyllabusRoute
+  '/today': typeof TodayRoute
+  '/lesson/$subtopicId': typeof LessonSubtopicIdRoute
   '/practice/$sessionId': typeof PracticeSessionIdRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/practice/$sessionId/review': typeof PracticeSessionIdReviewRoute
@@ -113,6 +137,9 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/practice': typeof PracticeRouteWithChildren
   '/progress': typeof ProgressRoute
+  '/syllabus': typeof SyllabusRoute
+  '/today': typeof TodayRoute
+  '/lesson/$subtopicId': typeof LessonSubtopicIdRoute
   '/practice/$sessionId': typeof PracticeSessionIdRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/practice/$sessionId/review': typeof PracticeSessionIdReviewRoute
@@ -128,6 +155,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/practice'
     | '/progress'
+    | '/syllabus'
+    | '/today'
+    | '/lesson/$subtopicId'
     | '/practice/$sessionId'
     | '/api/auth/$'
     | '/practice/$sessionId/review'
@@ -141,6 +171,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/practice'
     | '/progress'
+    | '/syllabus'
+    | '/today'
+    | '/lesson/$subtopicId'
     | '/practice/$sessionId'
     | '/api/auth/$'
     | '/practice/$sessionId/review'
@@ -154,6 +187,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/practice'
     | '/progress'
+    | '/syllabus'
+    | '/today'
+    | '/lesson/$subtopicId'
     | '/practice/$sessionId'
     | '/api/auth/$'
     | '/practice/$sessionId/review'
@@ -168,11 +204,28 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PracticeRoute: typeof PracticeRouteWithChildren
   ProgressRoute: typeof ProgressRoute
+  SyllabusRoute: typeof SyllabusRoute
+  TodayRoute: typeof TodayRoute
+  LessonSubtopicIdRoute: typeof LessonSubtopicIdRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/today': {
+      id: '/today'
+      path: '/today'
+      fullPath: '/today'
+      preLoaderRoute: typeof TodayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/syllabus': {
+      id: '/syllabus'
+      path: '/syllabus'
+      fullPath: '/syllabus'
+      preLoaderRoute: typeof SyllabusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/progress': {
       id: '/progress'
       path: '/progress'
@@ -236,6 +289,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PracticeSessionIdRouteImport
       parentRoute: typeof PracticeRoute
     }
+    '/lesson/$subtopicId': {
+      id: '/lesson/$subtopicId'
+      path: '/lesson/$subtopicId'
+      fullPath: '/lesson/$subtopicId'
+      preLoaderRoute: typeof LessonSubtopicIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/practice/$sessionId/review': {
       id: '/practice/$sessionId/review'
       path: '/review'
@@ -285,6 +345,9 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PracticeRoute: PracticeRouteWithChildren,
   ProgressRoute: ProgressRoute,
+  SyllabusRoute: SyllabusRoute,
+  TodayRoute: TodayRoute,
+  LessonSubtopicIdRoute: LessonSubtopicIdRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

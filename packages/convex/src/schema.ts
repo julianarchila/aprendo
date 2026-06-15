@@ -1,6 +1,8 @@
 import { defineSchema, defineTable } from 'convex/server'
 import { v } from 'convex/values'
 import {
+  coachSummaryDocumentValidator,
+  conceptLessonDocumentValidator,
   learnerAggregateValidator,
   pdfUploadStatusValidator,
   questionAttemptValidator,
@@ -93,6 +95,12 @@ export default defineSchema(
       diagnosticBaseline: v.optional(studentSummaryValidator),
       overallSummary: studentSummaryValidator,
     }).index('by_studentId', ['studentId']),
+    conceptLessons: defineTable(conceptLessonDocumentValidator)
+      .index('by_subtopicId', ['subtopicId'])
+      .index('by_status', ['status']),
+    coachSummaries: defineTable(coachSummaryDocumentValidator)
+      .index('by_studentId_weekIndex', ['studentId', 'weekIndex'])
+      .index('by_status', ['status']),
     practiceTutorThreads: defineTable({
       practiceSessionId: v.id('sessions'),
       studentId: v.id('students'),

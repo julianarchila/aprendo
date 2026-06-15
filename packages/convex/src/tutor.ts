@@ -8,7 +8,7 @@ import { components } from './_generated/api'
 import { v } from 'convex/values'
 import { paginationOptsValidator } from 'convex/server'
 import type { Doc, Id } from './_generated/dataModel'
-import taxonomyContract from '../../../docs/taxonomy.v1.json'
+import { getSubjectLabel, getSubtopicLabel } from './taxonomy'
 
 const agentComponent = (components as Record<string, unknown>).agent as ConstructorParameters<typeof Agent>[0]
 
@@ -153,18 +153,6 @@ const tutorAgent = new Agent(agentComponent, {
     create_artifact: createArtifactTool,
   },
 })
-
-const subjectLabelById = new Map<string, string>(
-  taxonomyContract.subjects.map((subject) => [subject.id, subject.label_es]),
-)
-
-const subtopicLabelById = new Map<string, string>(
-  taxonomyContract.subjects.flatMap((subject) =>
-    subject.categories.flatMap((category) =>
-      category.subtopics.map((subtopic) => [subtopic.id, subtopic.label_es] as const),
-    ),
-  ),
-)
 
 type QuestionContext = {
   questionNumber: number
@@ -488,10 +476,10 @@ export const getPracticeQuestionContext = internalQuery({
       .unique()
 
     const subjectLabel = question.subjectId
-      ? subjectLabelById.get(question.subjectId) ?? question.subjectId
+      ? getSubjectLabel(question.subjectId)
       : 'Sin asignar'
     const subtopicLabel = question.primarySubtopicId
-      ? subtopicLabelById.get(question.primarySubtopicId) ?? question.primarySubtopicId
+      ? getSubtopicLabel(question.primarySubtopicId)
       : 'Sin subtema'
 
     const isAnswered = attempt != null && attempt.selectedOption != null && attempt.isCorrect != null

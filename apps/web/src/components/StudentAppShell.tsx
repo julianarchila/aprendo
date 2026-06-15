@@ -4,7 +4,7 @@ import ThemeToggle from './ThemeToggle.tsx'
 import { authClient } from '../lib/auth-client.ts'
 import type { ActiveStudentSession } from '../lib/student-session.ts'
 
-type StudentSection = 'practice' | 'progress'
+type StudentSection = 'today' | 'syllabus' | 'practice' | 'progress'
 
 export function StudentAppShell({
   session,
@@ -52,16 +52,28 @@ export function StudentAppShell({
             </div>
             <div className="student-brand-copy">
               <span className="student-brand-title">Aprendo</span>
-              <span className="student-brand-subtitle">Preparacion Saber 11</span>
+              <span className="student-brand-subtitle">Preparación Saber 11</span>
             </div>
           </Link>
 
-          <nav className="student-topnav" aria-label="Navegacion principal">
+          <nav className="student-topnav" aria-label="Navegación principal">
+            <Link
+              to="/today"
+              className={`student-topnav-item ${activeSection === 'today' ? 'is-active' : ''}`}
+            >
+              Hoy
+            </Link>
+            <Link
+              to="/syllabus"
+              className={`student-topnav-item ${activeSection === 'syllabus' ? 'is-active' : ''}`}
+            >
+              Temario
+            </Link>
             <Link
               to="/practice"
               className={`student-topnav-item ${activeSection === 'practice' ? 'is-active' : ''}`}
             >
-              Practica
+              Práctica
             </Link>
             <Link
               to="/progress"

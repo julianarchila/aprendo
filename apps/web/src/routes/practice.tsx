@@ -19,7 +19,7 @@ import {
 } from '../lib/session-display.ts'
 import { sessionHistoryQuery, studentAppStateQuery } from '../lib/student-queries.ts'
 import { useCurrentStudent } from '../lib/student-session.ts'
-import { getSubjectLabel, subjectIds } from '../lib/taxonomy.ts'
+import { getSubjectLabel, getSubtopicLabel, subjectIds } from '../lib/taxonomy.ts'
 
 export const Route = createFileRoute('/practice')({
   component: PracticeHubPage,
@@ -30,16 +30,25 @@ type SessionRow = {
   kind: SessionKind
   status: 'created' | 'in_progress' | 'completed' | 'abandoned'
   subjectId?: string
+  subtopicId?: string
   startedAt: number
   questionCount: number
   summary?: { correctCount: number; questionCount: number; accuracy: number } | null
   simulacroSessionNumber?: number
 }
 
+/** The most specific label for a session's focus: subtopic, else subject. */
+function getSessionFocusLabel(session: SessionRow): string | null {
+  if (session.subtopicId != null) return getSubtopicLabel(session.subtopicId)
+  if (session.subjectId != null) return getSubjectLabel(session.subjectId)
+  return null
+}
+
 const FILTERS: Array<{ value: 'all' | SessionKind; label: string }> = [
   { value: 'all', label: 'Todas' },
   { value: 'recommended', label: 'Recomendada' },
   { value: 'topic', label: 'Por tema' },
+  { value: 'repaso', label: 'Repaso' },
   { value: 'simulacro', label: 'Simulacro' },
 ]
 
@@ -236,7 +245,7 @@ function PracticeHubPage() {
                   <span className="min-w-0 flex-1">
                     <strong>{SESSION_KIND_CONFIG[s.kind].labelEs} en curso</strong>
                     <small>
-                      {s.subjectId != null ? `${getSubjectLabel(s.subjectId)} · ` : ''}
+                      {getSessionFocusLabel(s) != null ? `${getSessionFocusLabel(s)} · ` : ''}
                       {s.kind === 'simulacro' && s.simulacroSessionNumber != null
                         ? `Sesión ${s.simulacroSessionNumber} · `
                         : ''}
@@ -297,7 +306,7 @@ function PracticeHubPage() {
                         {s.kind === 'simulacro' && s.simulacroSessionNumber != null
                           ? ` · Sesión ${s.simulacroSessionNumber}`
                           : ''}
-                        {s.subjectId != null ? ` · ${getSubjectLabel(s.subjectId)}` : ''}
+                        {getSessionFocusLabel(s) != null ? ` · ${getSessionFocusLabel(s)}` : ''}
                       </strong>
                       <small>{formatSessionDate(s.startedAt)}</small>
                     </span>

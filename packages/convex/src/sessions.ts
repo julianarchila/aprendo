@@ -2,7 +2,7 @@ import { internal } from './_generated/api'
 import { mutation, query, type QueryCtx } from './_generated/server'
 import { v } from 'convex/values'
 import type { Doc, Id } from './_generated/dataModel'
-import taxonomyContract from '../../../docs/taxonomy.v1.json'
+import { SUBJECT_IDS, getSubjectIdForSubtopic } from './taxonomy'
 import {
   getSimulacroSubjectTargets,
   getSessionKindConfig,
@@ -12,9 +12,13 @@ import {
   type SimulacroSessionConfig,
   type SubjectQuestionTarget,
 } from './sessionKinds'
+import {
+  collectUsableQuestionsBySubject,
+  collectUsableQuestionsBySubtopic,
+  hasUsableMetadata,
+  isInEligibilityPool,
+} from './questionPool'
 import { sessionKindValidator } from './validators'
-
-const SUBJECT_IDS = taxonomyContract.subjects.map((subject) => subject.id)
 
 type SelectionReason =
   | 'balanced_diagnostic'
@@ -40,21 +44,6 @@ function stableQuestionOrder<T extends { _creationTime: number; sequence: number
   })
 }
 
-/** A question is usable only if it has a scored answer key and full taxonomy. */
-function hasUsableMetadata(question: Doc<'questions'>) {
-  return (
-    question.answerCorrectOption != null
-    && question.subjectId != null
-    && question.categoryId != null
-    && question.primarySubtopicId != null
-  )
-}
-
-function isInEligibilityPool(question: Doc<'questions'>, pools: QuestionEligibilityPool[]) {
-  return question.eligibility != null
-    && (pools as string[]).includes(question.eligibility)
-}
-
 async function hasCompletedDiagnostic(ctx: QueryCtx, studentId: Id<'students'>) {
   const diagnostics = await ctx.db
     .query('sessions')
@@ -69,6 +58,8 @@ function recommendationSourceForKind(kind: SessionKind) {
       return 'diagnostic_plan' as const
     case 'topic':
       return 'manual' as const
+    case 'repaso':
+      return 'review_mistakes' as const
     default:
       return 'rule_based' as const
   }
@@ -89,17 +80,8 @@ async function selectBalancedBySubject(
   const selected: Selection[] = []
 
   for (const subjectId of SUBJECT_IDS) {
-    const pooled: Doc<'questions'>[] = []
-    for (const pool of config.eligibilityPools) {
-      const rows = await ctx.db
-        .query('questions')
-        .withIndex('by_subjectId_eligibility', (q) =>
-          q.eq('subjectId', subjectId).eq('eligibility', pool),
-        )
-        .collect()
-      pooled.push(...rows)
-    }
-    const usable = stableQuestionOrder(pooled.filter(hasUsableMetadata)).slice(0, perSubject)
+    const pooled = await collectUsableQuestionsBySubject(ctx, subjectId, config.eligibilityPools)
+    const usable = stableQuestionOrder(pooled).slice(0, perSubject)
     for (const question of usable) {
       selected.push({ questionId: question._id, selectionReason: reason, selectionMetadata: subjectId })
     }
@@ -117,17 +99,8 @@ async function selectSubjectTargets(
   const selected: Selection[] = []
 
   for (const target of subjectTargets) {
-    const pooled: Doc<'questions'>[] = []
-    for (const pool of config.eligibilityPools) {
-      const rows = await ctx.db
-        .query('questions')
-        .withIndex('by_subjectId_eligibility', (q) =>
-          q.eq('subjectId', target.subjectId).eq('eligibility', pool),
-        )
-        .collect()
-      pooled.push(...rows)
-    }
-    const usable = stableQuestionOrder(pooled.filter(hasUsableMetadata)).slice(0, target.questionCount)
+    const pooled = await collectUsableQuestionsBySubject(ctx, target.subjectId, config.eligibilityPools)
+    const usable = stableQuestionOrder(pooled).slice(0, target.questionCount)
     for (const question of usable) {
       selected.push({
         questionId: question._id,
@@ -163,26 +136,24 @@ function getSessionTimeLimitMs(
   return getSimulacroSessionConfig(config, simulacroSessionNumber).timeLimitMs
 }
 
-/** Heavily concentrated in a single requested subject (topic practice). */
+/**
+ * Concentrated in a single requested subject (topic practice). When a
+ * `subtopicId` is given (topic practice launched from the syllabus) the pool is
+ * narrowed to that subtopic via the `by_primarySubtopicId_eligibility` index.
+ */
 async function selectTopic(
   ctx: QueryCtx,
   config: SessionKindConfig,
   studentId: Id<'students'>,
   subjectId: string,
+  subtopicId: string | undefined,
 ): Promise<Selection[]> {
   const total = config.totalQuestions ?? 10
 
-  const pooled: Doc<'questions'>[] = []
-  for (const pool of config.eligibilityPools) {
-    const rows = await ctx.db
-      .query('questions')
-      .withIndex('by_subjectId_eligibility', (q) =>
-        q.eq('subjectId', subjectId).eq('eligibility', pool),
-      )
-      .collect()
-    pooled.push(...rows)
-  }
-  const usable = stableQuestionOrder(pooled.filter(hasUsableMetadata))
+  const pooled = subtopicId != null
+    ? await collectUsableQuestionsBySubtopic(ctx, subtopicId, config.eligibilityPools)
+    : await collectUsableQuestionsBySubject(ctx, subjectId, config.eligibilityPools)
+  const usable = stableQuestionOrder(pooled)
 
   const attempts = await ctx.db
     .query('questionAttempts')
@@ -198,7 +169,7 @@ async function selectTopic(
   return ordered.map((question) => ({
     questionId: question._id,
     selectionReason: 'topic_focus' as const,
-    selectionMetadata: subjectId,
+    selectionMetadata: subtopicId ?? subjectId,
   }))
 }
 
@@ -293,11 +264,79 @@ async function selectRecommended(
   return selected
 }
 
+/**
+ * The questions due for spaced review: those whose most recent attempt was
+ * incorrect (still "unlearned"), oldest mistakes first so the most overdue
+ * resurface. Returns the ordered list of due question ids.
+ */
+/**
+ * Launchable review questions for a student: those whose latest attempt was
+ * wrong AND that are still usable + in one of the given eligibility pools,
+ * oldest miss first. This is the single definition of "due for review" — both
+ * the `getReviewQueue` count and the `repaso` session selection draw from it, so
+ * the "Hoy" card can never advertise more review questions than a session can
+ * actually launch (the same invariant `questionPool` enforces for the syllabus).
+ */
+async function collectDueReviewQuestions(
+  ctx: QueryCtx,
+  studentId: Id<'students'>,
+  eligibilityPools: QuestionEligibilityPool[],
+): Promise<Doc<'questions'>[]> {
+  const attempts = await ctx.db
+    .query('questionAttempts')
+    .withIndex('by_studentId', (q) => q.eq('studentId', studentId))
+    .collect()
+
+  const latestByQuestion = new Map<Id<'questions'>, { isCorrect: boolean; answeredAt: number }>()
+  for (const attempt of attempts) {
+    if (attempt.answeredAt == null || attempt.isCorrect == null) continue
+    const previous = latestByQuestion.get(attempt.questionId)
+    if (previous == null || attempt.answeredAt > previous.answeredAt) {
+      latestByQuestion.set(attempt.questionId, {
+        isCorrect: attempt.isCorrect,
+        answeredAt: attempt.answeredAt,
+      })
+    }
+  }
+
+  const dueQuestionIds = [...latestByQuestion.entries()]
+    .filter(([, latest]) => !latest.isCorrect)
+    .sort((a, b) => a[1].answeredAt - b[1].answeredAt)
+    .map(([questionId]) => questionId)
+
+  const due: Doc<'questions'>[] = []
+  for (const questionId of dueQuestionIds) {
+    const question = await ctx.db.get(questionId)
+    if (question == null || !hasUsableMetadata(question) || !isInEligibilityPool(question, eligibilityPools)) {
+      continue
+    }
+    due.push(question)
+  }
+  return due
+}
+
+/** Previously-missed questions resurfaced for spaced review (repaso). */
+async function selectReviewMistakes(
+  ctx: QueryCtx,
+  config: SessionKindConfig,
+  studentId: Id<'students'>,
+): Promise<Selection[]> {
+  const total = config.totalQuestions ?? 10
+  const due = await collectDueReviewQuestions(ctx, studentId, config.eligibilityPools)
+
+  return due.slice(0, total).map((question) => ({
+    questionId: question._id,
+    selectionReason: 'recent_mistake' as const,
+    selectionMetadata: question.primarySubtopicId ?? question.subjectId ?? 'review',
+  }))
+}
+
 async function buildSelection(
   ctx: QueryCtx,
   config: SessionKindConfig,
   studentId: Id<'students'>,
   subjectId: string | undefined,
+  subtopicId: string | undefined,
   simulacroSessionNumber: number | undefined,
 ): Promise<Selection[]> {
   switch (config.strategy) {
@@ -314,9 +353,11 @@ async function buildSelection(
     }
     case 'topic':
       if (subjectId == null) throw new Error('Topic practice requires a subject.')
-      return selectTopic(ctx, config, studentId, subjectId)
+      return selectTopic(ctx, config, studentId, subjectId, subtopicId)
     case 'recommended':
       return selectRecommended(ctx, config, studentId)
+    case 'review_mistakes':
+      return selectReviewMistakes(ctx, config, studentId)
     default:
       return []
   }
@@ -331,6 +372,8 @@ export const createSession = mutation({
     studentId: v.id('students'),
     kind: sessionKindValidator,
     subjectId: v.optional(v.string()),
+    // Optional for `topic` practice launched from the syllabus by subtopic.
+    subtopicId: v.optional(v.string()),
     simulacroSessionNumber: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -341,14 +384,29 @@ export const createSession = mutation({
       throw new Error('Completa el diagnóstico antes de iniciar esta práctica.')
     }
 
+    // A subtopic is only meaningful for topic practice. When given, validate it
+    // and derive the parent subject so callers may pass just the subtopic.
+    const subtopicId = args.kind === 'topic' ? args.subtopicId : undefined
+    let subjectId = args.subjectId
+    if (subtopicId != null) {
+      const parentSubjectId = getSubjectIdForSubtopic(subtopicId)
+      if (parentSubjectId == null) {
+        throw new Error('Selecciona un subtema válido para esta práctica.')
+      }
+      if (subjectId != null && subjectId !== parentSubjectId) {
+        throw new Error('El subtema no pertenece a la asignatura seleccionada.')
+      }
+      subjectId = parentSubjectId
+    }
+
     if (config.requiresSubject) {
-      if (args.subjectId == null || !SUBJECT_IDS.includes(args.subjectId)) {
+      if (subjectId == null || !SUBJECT_IDS.includes(subjectId)) {
         throw new Error('Selecciona una asignatura válida para esta práctica.')
       }
     }
 
-    // Reuse an in-progress session of the same kind (and subject, for topic
-    // practice) instead of starting a duplicate.
+    // Reuse an in-progress session of the same kind (and subject/subtopic, for
+    // topic practice) instead of starting a duplicate.
     const active = await ctx.db
       .query('sessions')
       .withIndex('by_studentId_kind_status', (q) =>
@@ -357,7 +415,8 @@ export const createSession = mutation({
       .collect()
     const reusable = active.find(
       (session) =>
-        (args.kind !== 'topic' || session.subjectId === args.subjectId)
+        (args.kind !== 'topic'
+          || (session.subjectId === subjectId && session.subtopicId === subtopicId))
         && (args.kind !== 'simulacro'
           || session.simulacroSessionNumber === (args.simulacroSessionNumber ?? 1)),
     )
@@ -369,7 +428,8 @@ export const createSession = mutation({
       ctx,
       config,
       args.studentId,
-      args.subjectId,
+      subjectId,
+      subtopicId,
       args.simulacroSessionNumber,
     )
     if (selected.length === 0) {
@@ -382,7 +442,8 @@ export const createSession = mutation({
       kind: args.kind,
       status: 'in_progress',
       recommendationSource: recommendationSourceForKind(args.kind),
-      subjectId: config.requiresSubject ? args.subjectId : undefined,
+      subjectId: config.requiresSubject ? subjectId : undefined,
+      subtopicId,
       simulacroSessionNumber: args.kind === 'simulacro'
         ? (args.simulacroSessionNumber ?? 1)
         : undefined,
@@ -423,6 +484,19 @@ export const getActiveSession = query({
       .filter((session) => session.status === 'in_progress' || session.status === 'created')
       .filter((session) => args.kind == null || session.kind === args.kind)
       .sort((a, b) => b.startedAt - a.startedAt)[0] ?? null
+  },
+})
+
+export const getReviewQueue = query({
+  args: {
+    studentId: v.id('students'),
+  },
+  handler: async (ctx, args) => {
+    // Count against the same eligibility pools `repaso` draws from, so the count
+    // matches what a review session can actually launch.
+    const config = getSessionKindConfig('repaso')
+    const due = await collectDueReviewQuestions(ctx, args.studentId, config.eligibilityPools)
+    return { dueCount: due.length }
   },
 })
 

@@ -1,9 +1,10 @@
 import { useConvexMutation } from '@convex-dev/react-query'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
+  BookOpen,
   Bot,
   ChevronLeft,
   ChevronRight,
@@ -530,6 +531,18 @@ function ReviewPage() {
               <div className="review-explanation">
                 <p className="kicker mb-2">Explicación</p>
                 <MarkdownBlock markdown={currentQuestion.question.answerSolutionMarkdown} />
+              </div>
+            ) : null}
+
+            {currentQuestion.question.primarySubtopicId ? (
+              <div className="mt-4 flex justify-center">
+                <Link
+                  to="/lesson/$subtopicId"
+                  params={{ subtopicId: currentQuestion.question.primarySubtopicId }}
+                  className="btn-ghost inline-flex items-center gap-1.5 text-sm no-underline"
+                >
+                  <BookOpen size={14} /> Repasar este concepto
+                </Link>
               </div>
             ) : null}
 

@@ -39,6 +39,8 @@ Responsibilities:
 
 - Admin PDF upload and pipeline monitoring
 - Student diagnostic exam flow
+- Navigable syllabus (Temario) view, with subtopic-focused practice launch
+- Concept lesson view per subtopic (proactive AI teaching)
 - Student practice session flow
 - Results and progress views
 - Review flow after practice
@@ -224,6 +226,32 @@ completed session
   -> optionally generate next targeted session
 ```
 
+### 5. Concept lesson generation flow
+
+```text
+student opens a subtopic lesson
+  -> query reads the cached lesson (conceptLessons by subtopicId)
+  -> if absent/stale, a mutation atomically claims generation (status = generating,
+       stage = writing) and schedules an action  [policy: decideClaim / aiCache.ts]
+  -> action phase 1: LLM writes the text sections + decides if a demo helps;
+       internal mutation patches the text (status stays generating, stage = demo)
+  -> action phase 2 (only if a demo helps): LLM writes the demo as a themed body
+       fragment; internal mutation finalizes (status = ready, demo attached)
+  -> each patch streams to the student's subscribed query over the socket, so the
+       text appears first and the demo materializes in place
+```
+
+Constraints:
+
+- generation runs in an action (LLMs are not allowed in queries/mutations)
+- lessons are cached globally per subtopic and reused across students
+- `promptVersion` invalidates stale lessons; the `generating` status deduplicates concurrent requests
+- progress is communicated purely by patching the row (the `stage` field) — no extra channel; the reactive query is the transport
+- the demo is generated as a **body fragment**, not a standalone page: the client wraps it in a document carrying the app's fonts, design tokens and current light/dark theme, so the demo looks native rather than like generic HTML in an iframe. The demo is optional and resilient (a phase-2 failure still ships the text)
+- the demo is an **exploratory tool, not an assessment**: the prompt forbids quizzes/questions/graded exercises inside it — practice questions belong to the practice/generation features, not the lesson
+
+This reuses the deterministic-core / probabilistic-helper split: the cache and lifecycle are deterministic structured state; only the content is LLM-generated. The same generate-and-cache lifecycle backs the weekly `CoachSummary`.
+
 ## Minimal V1 Architectural Requirements
 
 V1 requires the following capabilities:
@@ -250,6 +278,10 @@ Attempts are raw events. Learner profiles are derived summaries. The raw attempt
 ### Recommendation vs tutoring
 
 The recommendation layer chooses the next questions. The tutor helps the student understand those questions. These concerns should remain independent.
+
+### Launchable-question pool as a shared seam
+
+What counts as a *launchable* question (full taxonomy + scored answer key + an eligibility tier the flow draws from) is defined once and reused by both session assembly and the syllabus counts. Keeping this single definition is what guarantees the Temario never advertises a question count a practice session can't actually fulfil. Both consumers go through the same pool helper rather than re-implementing the usability/eligibility filter.
 
 ## Suggested Processing Model
 

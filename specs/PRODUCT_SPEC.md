@@ -16,6 +16,16 @@ The product should feel like a focused digital prep environment for ICFES studen
 - Provide an AI tutor during practice and review sessions, but not during the diagnostic exam.
 - Build the content foundation from a growing question bank extracted from historical and curated exam PDFs.
 
+### Redesign direction (2026)
+
+Aprendo is being reframed from a *question bank with analytics and a reactive tutor* into a **guided study companion**. The shift in roles:
+
+- **Questions** are no longer the product — they are the *evidence* of mastery.
+- The **taxonomy** is no longer hidden tagging — it becomes the **primary navigation surface** (the navigable *Temario* / syllabus).
+- The **AI** moves from reactive post-failure chat toward a proactive teaching engine (lessons, study plan, coaching) over later phases.
+
+The student-facing information architecture is moving toward: **Hoy · Temario · Práctica · Progreso**. This is being delivered in phases (see `plans/redesign.md`); the navigable Temario is the first delivered surface.
+
 ## Problem Statement
 
 Students preparing for ICFES often face three problems:
@@ -91,6 +101,12 @@ At the product level, the system revolves around these concepts:
 - Attempt: a student's interaction with a question, including answer, correctness, timing, and help usage
 - Review session: a post-completion experience where the student revisits diagnostic, practice, or simulated-exam mistakes with AI support when allowed
 - Learner profile: an evolving summary of the student's performance by subject and subtopic
+- Syllabus (Temario): the canonical taxonomy (subjects → categories → subtopics) presented as a navigable study map, annotated per node with the student's mastery and the number of launchable questions available; the student launches subtopic-focused practice directly from it
+- Today (Hoy): the student home — a daily entry point that surfaces a study streak, the day's suggested action, the week's focus area, and any session to resume. It does not introduce new learner state; it composes existing signals. (Exam-date countdown is intentionally out of scope for now.)
+- Concept lesson: an AI-generated lesson that *teaches* one subtopic (Khan-Academy style) — a clear explanation that builds understanding, with an optional interactive demo to explore the concept. It is generated on demand the first time a subtopic's lesson is opened and cached globally (shared by all students), so the AI teaches *before* practice rather than only reacting after a mistake. Practice questions live in the practice features, not the lesson.
+- Spaced review (Repaso): a session kind that resurfaces previously-missed questions (those whose most recent attempt was wrong), oldest first, so mistakes come back until they are learned.
+- Weekly coach summary: a short AI-generated note about the student's week (a concrete win, a subject to reinforce, and a next step), generated once per week per student and shown on "Hoy".
+- AI-generated practice question: when a subtopic's question inventory is thin, the student can have the AI author additional ICFES-style multiple-choice questions for that subtopic. They are added to the bank as `practice_only` (never diagnostic) and flow through the normal practice/review machinery.
 
 ## Main User Flows
 
@@ -136,6 +152,8 @@ After the diagnostic and after future practice sessions, the student should be a
 - Areas that need more work
 - Areas that are improving
 
+The progress view is framed around **improvement, not a static snapshot**: it leads with how much overall accuracy has changed since the diagnostic baseline, charts weekly accuracy over time, and shows a per-subject "before vs now" (diagnostic → current) with deltas. Weak subtopics link straight into their concept lesson so the next step is one tap away.
+
 The product should communicate actionable next steps, not just scores.
 
 ### 4. Personalized practice sessions
@@ -155,6 +173,24 @@ Practice sessions may be:
 - Subject-focused practice
 - Subtopic-focused practice
 - Review sessions centered on recent mistakes
+
+### 4b. Navigable syllabus (Temario)
+
+The student can explore the full ICFES taxonomy as a study map rather than only encountering it as hidden tags. For each subject, category, and subtopic the syllabus shows:
+
+- the student's mastery (derived from subtopic/subject aggregates, not raw accuracy)
+- how many launchable questions exist for that node
+- a study status (e.g. mastered, in progress, to reinforce, not yet practiced, no questions yet)
+
+From any subtopic with available questions the student can launch a subtopic-focused practice session in one tap. The syllabus is both a progress map and a study menu, and is one of several entry points into practice (alongside the practice hub and, later, "Hoy").
+
+Mastery and counts are read-only joins over existing data — the syllabus does not introduce a new source of truth.
+
+### 4c. Concept lessons (proactive AI teaching)
+
+From a subtopic in the Temario the student can open a concept lesson before practicing. A lesson teaches the concept itself (Khan-Academy style): a clear written explanation that builds understanding, optionally paired with a small interactive demo to explore the idea. It deliberately contains no practice questions or exam-format tips — those belong to the practice features. Lessons are generated by AI on first request and cached per subtopic (global, not per student), so the cost is paid once and the content is reused.
+
+This makes the AI a proactive teaching engine rather than only a reactive post-mistake tutor. The lesson is independent of any practice session; the student can launch subtopic practice from the lesson page at any time.
 
 ### 5. Focused solving and review
 

@@ -13,7 +13,7 @@ import type { QueryCtx } from './_generated/server'
 import type { DataModel, Id } from './_generated/dataModel'
 
 const siteUrl = process.env.SITE_URL ?? 'http://localhost:3000'
-const trustedOrigins = Array.from(new Set([siteUrl, 'http://localhost:3002']))
+const trustedOrigins = Array.from(new Set([siteUrl, 'http://localhost:3002', 'http://localhost:3000']))
 
 const authFunctions: AuthFunctions = internal.auth
 

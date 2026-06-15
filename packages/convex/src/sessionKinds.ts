@@ -19,7 +19,7 @@
  * To tune a kind, edit its entry below — nothing else needs to change.
  */
 
-export const SESSION_KINDS = ['diagnostic', 'recommended', 'topic', 'simulacro'] as const
+export const SESSION_KINDS = ['diagnostic', 'recommended', 'topic', 'simulacro', 'repaso'] as const
 export type SessionKind = (typeof SESSION_KINDS)[number]
 
 /** How the question set for a session is assembled. */
@@ -32,6 +32,8 @@ export type SelectionStrategy =
   | 'recommended'
   /** Concentrated in a single requested subject. */
   | 'topic'
+  /** Previously-missed questions resurfaced for spaced review. */
+  | 'review_mistakes'
 
 /** Which question-bank eligibility tiers a kind may draw from. */
 export type QuestionEligibilityPool = 'diagnostic' | 'practice_only'
@@ -115,6 +117,19 @@ export const SESSION_KIND_CONFIG: Record<SessionKind, SessionKindConfig> = {
     requiresDiagnostic: true,
     launchableFromHub: true,
     requiresSubject: true,
+  },
+  repaso: {
+    kind: 'repaso',
+    labelEs: 'Repaso de errores',
+    taglineEs: 'Vuelve a las preguntas que fallaste para afianzarlas.',
+    strategy: 'review_mistakes',
+    totalQuestions: 10,
+    eligibilityPools: ['diagnostic', 'practice_only'],
+    timeLimitMs: null,
+    tutorInSolve: false,
+    requiresDiagnostic: true,
+    launchableFromHub: true,
+    requiresSubject: false,
   },
   simulacro: {
     kind: 'simulacro',
